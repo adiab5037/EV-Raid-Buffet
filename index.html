@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>EVRAID</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#14335c">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     خطوة 1: يرجى إدخال بيانات إعداد Firebase الخاصة بمشروعك من الصفحة التالية
+     https://console.firebase.google.com  (Project settings ⚙️ > عام > إضافة تطبيق ويب)
+     وحط كل قيمة مكان القيمة اللي جوّه علامتي التنصيص هنا:
+     ============================================================ -->
+<script>
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyByvzFZZKQILS_DUG-stjzF_jhNT3kkBK0",
+    authDomain: "ev-raid-buffet-a78c1.firebaseapp.com",
+    projectId: "ev-raid-buffet-a78c1",
+    storageBucket: "ev-raid-buffet-a78c1.firebasestorage.app",
+    messagingSenderId: "574467364009",
+    appId: "1:574467364009:web:b589f41eb15070340685b8"
+  };
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<!-- ============================================================
+     خطوة 2 (اختياري): بيانات إرسال إيميل للشيف عند كل طلب جديد (عن طريق EmailJS - مجاني وبدون سيرفر)
+     1) اعمل حساب على https://www.emailjs.com
+     2) اعمل Email Service (مثلاً Gmail) وهياديك serviceId
+     3) اعمل Email Template فيه المتغيرات: {{order_name}} و{{order_items}} و{{order_total}} و{{order_time}} و{{to_email}} وهياديك templateId
+     4) من Account > General هتلاقي الـ Public Key
+     5) حط القيم دي هنا وحط إيميل الشيف اللي هيستقبل الإشعارات فقط (مش كل الأدمنز)
+     لو سيبتها زي ما هي، التطبيق هيشتغل عادي بس من غير إرسال إيميلات
+     ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+  window.EMAILJS_CONFIG = {
+    serviceId: "ضع_SERVICE_ID_هنا",
+    templateId: "ضع_TEMPLATE_ID_هنا",
+    publicKey: "ضع_PUBLIC_KEY_هنا",
+    chefEmail: "ضع_ايميل_الشيف_هنا"
+  };
+</script>
+
+<style>
+  :root{
+    --bg-1:#eef6f1;
+    --bg-2:#f6f9fb;
+    --card:#ffffff;
+    --card-2:#f3f7f5;
+    --ink:#16324f;
+    --navy:#14335c;
+    --navy-deep:#0c2340;
+    --green:#5cb246;
+    --green-dark:#469236;
+    --muted:#5b7086;
+    --line:rgba(20,51,92,0.12);
+    --danger:#c53030;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Tajawal',sans-serif;
+    background:
+      radial-gradient(ellipse at top, rgba(92,178,70,0.08) 0%, transparent 55%),
+      linear-gradient(160deg, var(--bg-1), var(--bg-2) 70%);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:460px;
+    min-height:100vh;
+    padding:18px 16px 90px;
+    position:relative;
+  }
+  .brand{
+    text-align:center;
+    padding:22px 0 14px;
+  }
+  .brand .eyebrow{
+    display:inline-block;
+    font-size:11px;
+    letter-spacing:4px;
+    color:#fff;
+    background:var(--green);
+    padding:3px 12px;
+    border-radius:20px;
+    font-weight:800;
+    margin-bottom:10px;
+    font-family:'Tajawal',sans-serif;
+  }
+  .brand h1{
+    font-family:'Poppins',sans-serif;
+    font-weight:900;
+    font-size:clamp(30px, 9vw, 42px);
+    margin:0;
+    letter-spacing:0.5px;
+    direction:ltr;
+  }
+  .brand h1 .ev{color:var(--green);}
+  .brand h1 .raid{color:var(--navy);}
+  .brand p{
+    margin:6px 0 0;
+    font-size:13px;
+    color:var(--muted);
+    letter-spacing:0.3px;
+  }
+  .brand .rule{
+    width:80px;height:3px;margin:12px auto 0;
+    border-radius:3px;
+    background:linear-gradient(90deg, var(--green), var(--navy));
+  }
+  .warn-banner{
+    background:#fdf1e8;
+    border:1px solid #f0c894;
+    color:#8a5a1a;
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:13px;
+    margin-bottom:14px;
+    line-height:1.7;
+  }
+  .warn-banner b{color:#a5600c;}
+  .install-btn{
+    display:block;
+    width:100%;
+    padding:11px;
+    border-radius:10px;
+    background:var(--navy);
+    border:1.5px solid var(--navy);
+    color:#fff;
+    font-weight:800;
+    font-size:13px;
+    margin-bottom:14px;
+    box-shadow:0 6px 16px rgba(20,51,92,0.25);
+  }
+  .card{
+    background:var(--card);
+    color:var(--ink);
+    border-radius:16px;
+    padding:18px;
+    box-shadow:0 10px 26px rgba(20,51,92,0.08);
+    border:1px solid var(--line);
+    margin-bottom:16px;
+  }
+  .card h2{
+    font-family:'Poppins',sans-serif;
+    font-weight:800;
+    font-size:19px;
+    margin:0 0 10px;
+    color:var(--navy);
+  }
+  label{font-size:13px;font-weight:700;color:var(--ink);opacity:0.7;display:block;margin-bottom:6px;}
+  input[type=text], input[type=number], input[type=password]{
+    width:100%;
+    padding:11px 12px;
+    border-radius:10px;
+    border:1.5px solid var(--line);
+    background:var(--card-2);
+    font-family:'Tajawal';
+    font-size:15px;
+    color:var(--ink);
+    outline:none;
+  }
+  input:focus{border-color:var(--green);}
+  button{
+    font-family:'Tajawal';
+    cursor:pointer;
+    border:none;
+  }
+  .btn-main{
+    width:100%;
+    padding:13px;
+    border-radius:10px;
+    background:linear-gradient(180deg, var(--green), var(--green-dark));
+    color:#fff;
+    font-weight:900;
+    font-size:15px;
+    margin-top:10px;
+    box-shadow:0 4px 14px rgba(92,178,70,0.35);
+  }
+  .btn-main:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-ghost{
+    padding:9px 14px;
+    border-radius:8px;
+    background:transparent;
+    border:1.5px solid var(--navy);
+    color:var(--navy);
+    font-weight:700;
+    font-size:13px;
+  }
+  .tabs{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    display:flex;
+    justify-content:center;
+    z-index:50;
+  }
+  .tabs-inner{
+    width:100%;max-width:460px;
+    display:flex;
+    background:#ffffff;
+    border-top:1px solid var(--line);
+    box-shadow:0 -6px 20px rgba(20,51,92,0.1);
+  }
+  .tab{
+    flex:1;
+    text-align:center;
+    padding:12px 4px 10px;
+    background:none;
+    color:var(--muted);
+    opacity:0.7;
+    font-size:12px;
+    font-weight:700;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .tab.active{opacity:1;color:var(--green-dark);}
+  .tab .ic{font-size:19px;}
+  .menu-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .menu-item:last-child{border-bottom:none;}
+  .menu-item .name{font-weight:700;font-size:15px;}
+  .price-row{display:flex;gap:6px;margin-top:6px;}
+  .price-btn{
+    padding:6px 10px;
+    border-radius:8px;
+    background:rgba(20,51,92,0.05);
+    border:1px solid rgba(20,51,92,0.2);
+    color:var(--navy);
+    font-size:12px;
+    font-weight:700;
+  }
+  .price-btn.selected{background:var(--green); border-color:var(--green); color:#fff;}
+  .cart-bar{
+    position:sticky;
+    bottom:66px;
+    background:var(--navy);
+    color:#fff;
+    border-radius:12px;
+    padding:12px 14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-weight:800;
+    box-shadow:0 8px 20px rgba(20,51,92,0.3);
+    margin-top:6px;
+  }
+  .cart-bar .btn-main{box-shadow:none;}
+  .balance-box{ text-align:center; padding:14px; }
+  .balance-box .amt{ font-family:'Poppins',sans-serif; font-weight:800; font-size:38px; color:var(--navy); }
+  .balance-box .amt.owe{color:#c53030;}
+  .balance-box .amt.ok{color:var(--green-dark);}
+  .order-row{
+    background:var(--card-2);
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    font-size:13px;
+    border-right:4px solid var(--navy);
+  }
+  .order-row.new{border-right-color:var(--green); animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(92,178,70,0.4);}70%{box-shadow:0 0 0 8px rgba(92,178,70,0);}100%{box-shadow:0 0 0 0 rgba(92,178,70,0);}}
+  .order-row .top{display:flex;justify-content:space-between;font-weight:800;margin-bottom:4px;}
+  .order-row .items{opacity:0.75;}
+  .order-row .actions{margin-top:8px;display:flex;gap:8px;}
+  .small{font-size:12px;opacity:0.65;}
+  .empty{text-align:center;padding:30px 10px;opacity:0.55;font-size:14px;}
+  .toast{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);
+    background:var(--green-dark);color:#fff;padding:10px 18px;border-radius:30px;
+    font-weight:700;font-size:13px;z-index:100;box-shadow:0 6px 18px rgba(20,51,92,0.3);
+    opacity:0;pointer-events:none;transition:opacity .3s, top .3s;
+  }
+  .toast.show{opacity:1;top:24px;}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{
+    width:26px;height:26px;border-radius:6px;background:var(--navy);color:#fff;font-weight:900;font-size:15px;line-height:1;
+  }
+  .qty-badge{min-width:20px;text-align:center;font-weight:800;}
+  table.balances{width:100%;border-collapse:collapse;font-size:13px;}
+  table.balances th,table.balances td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;}
+  table.balances th{color:var(--navy);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="brand">
+    <div class="eyebrow">ORDERS</div>
+    <h1><span class="ev">EV</span><span class="raid">RAID</span></h1>
+    <p>اطلب وجبتك من مطبخ الشركة</p>
+    <div class="rule"></div>
+  </div>
+  <div id="banner"></div>
+  <div id="installArea"></div>
+  <div id="content"></div>
+</div>
+<div class="tabs"><div class="tabs-inner" id="tabbar"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Firebase setup ----------
+let db = null;
+let firebaseReady = false;
+try{
+  if(window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !window.FIREBASE_CONFIG.apiKey.includes('ضع_')){
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    db = firebase.firestore();
+    firebaseReady = true;
+  }
+}catch(e){ console.error('Firebase init failed', e); }
+
+if(!firebaseReady){
+  document.getElementById('banner').innerHTML = `
+    <div class="warn-banner">
+      <b>خطوة أخيرة مطلوبة:</b> يرجى إدخال بيانات إعداد Firebase في أول ملف index.html
+      (موضّح مكانها بتعليق أعلى الملف)، حتى يتم حفظ الطلبات والأرصدة ومزامنتها بين جميع المستخدمين.
+      وحتى إتمام هذه الخطوة، يعمل التطبيق دون حفظ فعلي للبيانات.
+    </div>`;
+}
+
+// ---------- PWA install ----------
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  const area = document.getElementById('installArea');
+  area.innerHTML = `<button class="install-btn" id="installBtn">⬇️ تثبيت التطبيق على الشاشة الرئيسية</button>`;
+  document.getElementById('installBtn').onclick = async ()=>{
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    area.innerHTML = '';
+  };
+});
+
+// ---------- App state & data ----------
+const MENU = [
+  {id:'roumy', name:'جبنة رومي', baladi:15, fransawi:20},
+  {id:'tomato_cheese', name:'جبنة بالطماطم', baladi:12, fransawi:15},
+  {id:'cheddar', name:'جبنة شيدر', baladi:25, fransawi:30},
+  {id:'luncheon', name:'لانشون', baladi:15, fransawi:20},
+  {id:'salad', name:'سلطة خضراء', baladi:30, fransawi:null},
+  {id:'boiled_egg', name:'بيض مسلوق', baladi:12, fransawi:15},
+  {id:'omelette', name:'بيض (أومليت)', baladi:12, fransawi:15},
+  {id:'egg_cheddar', name:'بيض (شيدر)', baladi:25, fransawi:30},
+  {id:'egg_roumy', name:'بيض (رومي)', baladi:25, fransawi:30},
+  {id:'egg_basterma', name:'بيض (بسطرمة)', baladi:30, fransawi:35},
+  {id:'sicilians', name:'سكلانس', baladi:25, fransawi:30},
+];
+
+// سناكس بسعر ثابت للقطعة
+const SNACKS = [
+  {id:'mcvities', name:'بسكويت ماكفيز', price:10},
+  {id:'oreo', name:'أوريو', price:10},
+  {id:'mandolin', name:'ماندولين', price:10},
+  {id:'ulker', name:'أولكر', price:10},
+  {id:'molto_magnum', name:'مولتو ماجنم', price:15},
+];
+
+const DRINKS = [
+  {id:'tea', name:'شاي'},
+  {id:'anise', name:'ينسون'},
+  {id:'karkade', name:'كركديه'},
+  {id:'coffee', name:'قهوة'},
+  {id:'latte', name:'لاتيه'},
+  {id:'macchiato', name:'ماكياتو'},
+  {id:'espresso', name:'إسبريسو'},
+  {id:'cappuccino', name:'كابتشينو'},
+  {id:'ice_coffee', name:'آيس كوفي'},
+];
+
+// ============================================================
+// غيّر السطر ده لإيميل/يوزر نيم الأدمن اللي هيدخل بيه (حساس لحالة الأحرف؟ لأ)
+const ADMIN_EMAIL = "admin@evraid.com";
+// رقم الإنستاباي اللي هيظهر للموظف عشان يحول عليه
+const INSTAPAY_NUMBER = "ضع_رقم_الانستاباي_هنا";
+// ============================================================
+
+let state = {
+  tab: 'order', name: '', role: null, isAdmin: false,
+  cart: {}, drinkCart: {}, snackCart: {}, balance: 0, paymentMethod: 'balance',
+  orders: [], balances: [],
+  outOfStock: new Set(),
+  seenOrderIds: new Set(),
+  kitchenUnlocked: false,
+  hasPolledOnce: false,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null,
+  _audioCtx: null,
+};
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function fmt(n){ return (n<0? '-' : '') + Math.abs(n) + ' ج.م'; }
+async function hashPass(str){
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// يضغط صورة اسكرين شوت التحويل ويحولها لنص base64 عشان تتخزن جوه Firestore
+function fileToCompressedBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error('read failed'));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('image failed'));
+      img.onload = ()=>{
+        const maxW = 700;
+        const scale = Math.min(1, maxW/img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width*scale);
+        canvas.height = Math.round(img.height*scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+// إرسال إيميل تنبيه للشيف بس (مش لكل الأدمنز) عند وجود طلب جديد
+async function sendChefEmail(order){
+  try{
+    const cfg = window.EMAILJS_CONFIG;
+    if(!cfg || !cfg.publicKey || cfg.publicKey.includes('ضع_') || !cfg.chefEmail || cfg.chefEmail.includes('ضع_')) return;
+    if(!window.emailjs) return;
+    if(!state._emailjsInit){ emailjs.init(cfg.publicKey); state._emailjsInit = true; }
+    const itemsStr = order.items.map(i=>`${i.name} ×${i.qty}`).join('، ');
+    await emailjs.send(cfg.serviceId, cfg.templateId, {
+      to_email: cfg.chefEmail,
+      order_name: order.name,
+      order_items: itemsStr,
+      order_total: order.kind==='drinks' ? 'مشروبات (فري)' : fmt(order.total),
+      order_time: new Date(order.ts).toLocaleString('ar-EG')
+    });
+  }catch(e){ console.error('email send failed', e); }
+}
+// إدارة الأصناف "أوت أوف ستوك"
+function listenOutOfStock(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('settings').doc('outOfStock').onSnapshot(doc=>{
+    cb(doc.exists ? (doc.data().ids||[]) : []);
+  });
+}
+async function toggleStock(id){
+  if(!firebaseReady) return;
+  const ref = db.collection('settings').doc('outOfStock');
+  await db.runTransaction(async (t)=>{
+    const doc = await t.get(ref);
+    const ids = doc.exists ? (doc.data().ids||[]) : [];
+    const next = ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id];
+    t.set(ref, {ids: next}, {merge:true});
+  });
+}
+
+// ---------- Data layer (Firestore) ----------
+async function getBalance(name){
+  if(!firebaseReady) return 0;
+  try{
+    const doc = await db.collection('balances').doc(name).get();
+    return doc.exists ? (doc.data().value || 0) : 0;
+  }catch(e){ return 0; }
+}
+async function addToBalance(name, delta){
+  if(!firebaseReady) return;
+  const ref = db.collection('balances').doc(name);
+  await db.runTransaction(async (t)=>{
+    const doc = await t.get(ref);
+    const cur = doc.exists ? (doc.data().value || 0) : 0;
+    t.set(ref, {value: cur + delta}, {merge:true});
+  });
+}
+async function saveOrder(order){
+  if(!firebaseReady) return;
+  await db.collection('orders').doc(order.id).set(order);
+}
+async function markOrderDone(id){
+  if(!firebaseReady) return;
+  await db.collection('orders').doc(id).update({status:'done'});
+}
+
+function listenOrders(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('orders').orderBy('ts','desc').onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()));
+  });
+}
+function listenBalances(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('balances').onSnapshot(snap=>{
+    const out = snap.docs.map(d=>({name:d.id, value:d.data().value||0}));
+    out.sort((a,b)=>a.value-b.value);
+    cb(out);
+  });
+}
+
+// ---------- Render ----------
+function render(){
+  const c = document.getElementById('content');
+  if(!state.role){ c.innerHTML = roleScreen(); }
+  else if(!state.name){ c.innerHTML = nameScreen(); }
+  else if(state.role === 'employee' || state.role === 'admin'){
+    if(state.tab === 'order') c.innerHTML = orderScreen();
+    else if(state.tab === 'snacks') c.innerHTML = snacksScreen();
+    else if(state.tab === 'drinks') c.innerHTML = drinksScreen();
+    else if(state.tab === 'balance') c.innerHTML = balanceScreen();
+    else if(state.tab === 'admin') c.innerHTML = adminScreen();
+  }
+  else { c.innerHTML = state.kitchenUnlocked ? kitchenScreen() : kitchenGate(); }
+  renderTabs();
+  bindEvents();
+}
+
+function roleScreen(){
+  return `
+  <div class="card" style="text-align:center;">
+    <h2>الرجاء تحديد صفة الدخول</h2>
+    <p class="small">يرجى اختيار صفتك لعرض الصفحة المناسبة</p>
+    <button class="btn-main" data-action="role" data-role="employee">👤 موظف — تقديم طلب</button>
+    <button class="btn-main" style="background:linear-gradient(180deg,var(--navy),var(--navy-deep));color:#fff;margin-top:12px;" data-action="role" data-role="kitchen">🍳 فريق المطبخ</button>
+  </div>`;
+}
+function nameScreen(){
+  return `
+  <div class="card" style="text-align:center;">
+    <h2>تسجيل الدخول</h2>
+    <p class="small">أول مرة؟ اكتب اسم مستخدم وكلمة مرور جديدين وسيتم إنشاء حسابك تلقائيًا.</p>
+    <label style="margin-top:10px;">اسم المستخدم</label>
+    <input type="text" id="userInput" placeholder="مثلاً: ahmed.mohamed" />
+    <label style="margin-top:10px;">كلمة المرور</label>
+    <input type="password" id="passInput" placeholder="••••••••" />
+    <button class="btn-main" data-action="doLogin">دخول</button>
+    <button class="btn-ghost" style="margin-top:10px;" data-action="backRole">رجوع</button>
+  </div>`;
+}
+function orderScreen(){
+  let total = 0;
+  for(const id in state.cart){
+    const it = MENU.find(m=>m.id===id);
+    const c = state.cart[id];
+    total += (c.type==='baladi'? it.baladi : it.fransawi) * c.qty;
+  }
+  const available = MENU.filter(it=>!state.outOfStock.has(it.id));
+  const items = available.map(it=>{
+    const c = state.cart[it.id];
+    const qty = c? c.qty : 0;
+    return `
+    <div class="menu-item">
+      <div style="flex:1;">
+        <div class="name">${it.name}</div>
+        <div class="price-row">
+          ${it.baladi!=null? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
+          ${it.fransawi!=null? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
+        </div>
+      </div>
+      ${qty>0? `
+      <div class="stepper">
+        <button data-action="dec" data-id="${it.id}">−</button>
+        <span class="qty-badge">${qty}</span>
+        <button data-action="inc" data-id="${it.id}">+</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+  const cartCount = Object.keys(state.cart).length;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card"><h2>البوفيه</h2>${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
+  ${cartCount>0? `${paymentMethodBlock()}
+  <div class="cart-bar">
+    <span>الإجمالي: ${fmt(total)}</span>
+    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
+  </div>`:''}`;
+}
+function paymentMethodBlock(){
+  return `
+  <div class="card" style="padding:12px 14px;">
+    <div class="small" style="margin-bottom:8px;font-weight:700;">طريقة الدفع</div>
+    <div class="price-row" style="margin-top:0;">
+      <button class="price-btn ${state.paymentMethod==='balance'?'selected':''}" style="flex:1;text-align:center;" data-action="setPayment" data-method="balance">💳 من الرصيد</button>
+      <button class="price-btn ${state.paymentMethod==='cash'?'selected':''}" style="flex:1;text-align:center;" data-action="setPayment" data-method="cash">💵 كاش للشيف</button>
+      <button class="price-btn ${state.paymentMethod==='instapay'?'selected':''}" style="flex:1;text-align:center;" data-action="setPayment" data-method="instapay">📲 إنستاباي</button>
+    </div>
+    ${state.paymentMethod==='instapay'? `
+    <div style="margin-top:12px;">
+      <div class="small" style="margin-bottom:6px;">حوّل على رقم الإنستاباي: <b style="color:var(--navy);direction:ltr;display:inline-block;">${INSTAPAY_NUMBER}</b></div>
+      <label style="margin-top:8px;">الرقم اللي حوّلت منه</label>
+      <input type="text" id="instapayPhoneInput" placeholder="01xxxxxxxxx" />
+      <label style="margin-top:10px;">اسكرين شوت التحويل</label>
+      <input type="file" id="instapayFileInput" accept="image/*" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" />
+    </div>`:''}
+  </div>`;
+}
+function snacksScreen(){
+  let total = 0;
+  for(const id in state.snackCart){
+    const s = SNACKS.find(m=>m.id===id);
+    total += s.price * state.snackCart[id].qty;
+  }
+  const available = SNACKS.filter(s=>!state.outOfStock.has(s.id));
+  const items = available.map(s=>{
+    const qty = state.snackCart[s.id] ? state.snackCart[s.id].qty : 0;
+    return `
+    <div class="menu-item">
+      <div class="name">${s.name} <span class="small">— ${s.price} ج.م</span></div>
+      ${qty>0? `
+      <div class="stepper">
+        <button data-action="decSnack" data-id="${s.id}">−</button>
+        <span class="qty-badge">${qty}</span>
+        <button data-action="incSnack" data-id="${s.id}">+</button>
+      </div>` : `<button class="price-btn" data-action="incSnack" data-id="${s.id}">إضافة +</button>`}
+    </div>`;
+  }).join('');
+  const snackCount = Object.keys(state.snackCart).length;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card"><h2>سناكس</h2>${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
+  ${snackCount>0? `${paymentMethodBlock()}
+  <div class="cart-bar">
+    <span>الإجمالي: ${fmt(total)}</span>
+    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmSnackOrder">تأكيد الطلب</button>
+  </div>`:''}`;
+}
+function drinksScreen(){
+  const available = DRINKS.filter(d=>!state.outOfStock.has(d.id));
+  const items = available.map(d=>{
+    const qty = state.drinkCart[d.id] ? state.drinkCart[d.id].qty : 0;
+    return `
+    <div class="menu-item">
+      <div class="name">${d.name}</div>
+      ${qty>0? `
+      <div class="stepper">
+        <button data-action="decDrink" data-id="${d.id}">−</button>
+        <span class="qty-badge">${qty}</span>
+        <button data-action="incDrink" data-id="${d.id}">+</button>
+      </div>` : `<button class="price-btn" data-action="incDrink" data-id="${d.id}">إضافة +</button>`}
+    </div>`;
+  }).join('');
+  const drinkCount = Object.keys(state.drinkCart).length;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card">
+    <h2>المشروبات</h2>
+    <p class="small" style="margin-top:-6px;">جميع المشروبات مجانية ولا تُخصم من رصيدك</p>
+    ${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}
+  </div>
+  ${drinkCount>0? `
+  <div class="cart-bar">
+    <span>عدد الأصناف: ${drinkCount}</span>
+    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmDrinkOrder">تأكيد الطلب</button>
+  </div>`:''}`;
+}
+function balanceScreen(){
+  const owed = state.balance < 0;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card balance-box">
+    <div class="small">${owed? 'المستحق عليك' : 'رصيدك'}</div>
+    <div class="amt ${owed? 'owe':'ok'}">${fmt(Math.abs(state.balance))}</div>
+    <div class="small" style="margin-top:6px;">${owed? 'يُخصم كل طلب من رصيدك تلقائيًا. عند سداد المبلغ نقدًا، يقوم المطبخ بتسجيله وتحديث رصيدك.' : 'رصيدك موجب حاليًا. يُرجى تسوية المبلغ نقدًا عند المطبخ عندما ينفد.'}</div>
+  </div>
+  <div class="card"><h2>آخر طلباتي</h2><div id="myOrdersList" class="small">جارِ التحميل...</div></div>`;
+}
+function kitchenGate(){
+  return `
+  <div class="card" style="text-align:center;">
+    <h2>لوحة المطبخ</h2>
+    <p class="small">هذا القسم مخصص لفريق المطبخ فقط</p>
+    <button class="btn-main" data-action="unlockKitchen">دخول</button>
+    <button class="btn-ghost" style="margin-top:10px;" data-action="backRole">رجوع</button>
+  </div>`;
+}
+function kitchenScreen(){
+  const pending = state.orders.filter(o=>o.status==='pending');
+  const done = state.orders.filter(o=>o.status==='done');
+  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
+  const doneHtml = done.slice(0,10).map(o=>orderRow(o,false)).join('');
+  const balancesHtml = state.balances.length? `
+    <table class="balances">
+      <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
+      ${state.balances.map(b=>`
+        <tr>
+          <td>${b.name}</td>
+          <td style="color:${b.value<0?'#a11f1f':'#1f7a3d'};font-weight:800;">${fmt(b.value)}</td>
+          <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>
+        </tr>`).join('')}
+    </table>` : `<div class="empty">لا توجد أرصدة مسجلة بعد</div>`;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <h2 style="margin:0;">الطلبات الجديدة</h2>
+  </div>
+  <div class="card">${ordersHtml}</div>
+  ${done.length? `<div class="card"><h2>تم تحضيرها</h2>${doneHtml}</div>`:''}
+  <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>`;
+}
+function adminScreen(){
+  const pending = state.orders.filter(o=>o.status==='pending');
+  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
+  const historyHtml = state.orders.length? state.orders.slice(0,60).map(o=>orderRow(o,false)).join('') : `<div class="empty">لا يوجد سجل طلبات بعد</div>`;
+  const balancesHtml = state.balances.length? `
+    <table class="balances">
+      <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
+      ${state.balances.map(b=>`
+        <tr>
+          <td>${b.name}</td>
+          <td style="color:${b.value<0?'#c53030':'var(--green-dark)'};font-weight:800;">${fmt(b.value)}</td>
+          <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>
+        </tr>`).join('')}
+    </table>` : `<div class="empty">لا توجد أرصدة مسجلة بعد</div>`;
+  // إجمالي المبيعات: بس الأصناف اللي بفلوس (مش المشروبات الفري)
+  const paidOrders = state.orders.filter(o=>o.kind!=='drinks');
+  const totalSales = paidOrders.reduce((s,o)=>s+o.total,0);
+  const salesHtml = `<div class="balance-box" style="padding:8px;"><div class="small">إجمالي مبيعات الأصناف المدفوعة (البوفيه والسناكس)</div><div class="amt ok">${fmt(totalSales)}</div></div>`;
+  const stockableItems = [
+    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه'})),
+    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس'})),
+    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات'})),
+  ];
+  const stockHtml = `
+    <table class="balances">
+      <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
+      ${stockableItems.map(it=>{
+        const isOut = state.outOfStock.has(it.id);
+        return `<tr>
+          <td>${it.name} <span class="small">(${it.cat})</span></td>
+          <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
+          <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف (أوت أوف ستوك)'}</button></td>
+        </tr>`;
+      }).join('')}
+    </table>`;
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">لوحة التحكم</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card"><h2>إجمالي المبيعات</h2>${salesHtml}</div>
+  <div class="card"><h2>الطلبات الجديدة</h2>${ordersHtml}</div>
+  <div class="card"><h2>سجل كل الطلبات</h2><p class="small" style="margin-top:-6px;">آخر 60 طلب، الأحدث أولًا</p>${historyHtml}</div>
+  <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>
+  <div class="card"><h2>إدارة المخزون</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه</p>${stockHtml}</div>`;
+}
+function orderRow(o, isPending){
+  const itemsStr = o.items.map(i=> i.type ? `${i.name} (${i.type==='baladi'?'بلدي':'فرنساوي'}) ×${i.qty}` : `${i.name} ×${i.qty}`).join('، ');
+  const time = new Date(o.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+  const isDrinks = o.kind === 'drinks';
+  const payLabel = o.paymentMethod==='cash'? '💵 كاش' : o.paymentMethod==='instapay' ? '📲 إنستاباي' : '💳 رصيد';
+  const payBadge = !isDrinks ? payLabel : '';
+  const instapayInfo = (!isDrinks && o.paymentMethod==='instapay') ? `
+    <div class="small" style="margin-top:6px;">حوّل من: ${o.instapaySender||''}</div>
+    ${o.instapayScreenshot? `<img src="${o.instapayScreenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}` : '';
+  return `
+  <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}">
+    <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
+    <div class="items">${itemsStr}</div>
+    <div class="small">${time}${payBadge? ' · '+payBadge : ''}</div>
+    ${instapayInfo}
+    ${isPending? `<div class="actions"><button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button></div>`:''}
+  </div>`;
+}
+function renderTabs(){
+  const tb = document.getElementById('tabbar');
+  if(!state.role || !state.name){ tb.innerHTML=''; return; }
+  if(state.role==='employee'){
+    tb.innerHTML = `
+      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه</button>
+      <button class="tab ${state.tab==='snacks'?'active':''}" data-action="tab" data-tab="snacks"><span class="ic">🍫</span>سناكس</button>
+      <button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>
+      <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>`;
+  } else if(state.role==='admin'){
+    tb.innerHTML = `
+      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه</button>
+      <button class="tab ${state.tab==='snacks'?'active':''}" data-action="tab" data-tab="snacks"><span class="ic">🍫</span>سناكس</button>
+      <button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>
+      <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>
+      <button class="tab ${state.tab==='admin'?'active':''}" data-action="tab" data-tab="admin"><span class="ic">🛠️</span>لوحة التحكم</button>`;
+  } else {
+    tb.innerHTML = `<button class="tab active"><span class="ic">🍳</span>لوحة المطبخ</button>`;
+  }
+}
+function bindEvents(){
+  document.querySelectorAll('[data-action]').forEach(el=>{
+    el.onclick = async ()=>{
+      const action = el.dataset.action;
+      if(action==='role'){ state.role = el.dataset.role; render(); }
+      else if(action==='backRole'){ state.role = null; state.kitchenUnlocked=false; render(); }
+      else if(action==='doLogin'){ await doLogin(); }
+      else if(action==='switchUser'){
+        state.name=''; state.role=null; state.cart={}; state.drinkCart={}; state.snackCart={}; state.isAdmin=false;
+        if(state._unsubOrders){ state._unsubOrders(); state._unsubOrders=null; }
+        if(state._unsubBalances){ state._unsubBalances(); state._unsubBalances=null; }
+        if(state._unsubStock){ state._unsubStock(); state._unsubStock=null; }
+        render();
+      }
+      else if(action==='setPayment'){ state.paymentMethod = el.dataset.method; render(); }
+      else if(action==='pick'){
+        const id = el.dataset.id, type = el.dataset.type;
+        if(!state.cart[id]) state.cart[id] = {type, qty:1};
+        else state.cart[id].type = type;
+        render();
+      }
+      else if(action==='inc'){ state.cart[el.dataset.id].qty++; render(); }
+      else if(action==='dec'){
+        const id = el.dataset.id;
+        state.cart[id].qty--;
+        if(state.cart[id].qty<=0) delete state.cart[id];
+        render();
+      }
+      else if(action==='confirmOrder'){ await submitOrder(); }
+      else if(action==='incDrink'){
+        const id = el.dataset.id;
+        if(!state.drinkCart[id]) state.drinkCart[id] = {qty:1};
+        else state.drinkCart[id].qty++;
+        render();
+      }
+      else if(action==='decDrink'){
+        const id = el.dataset.id;
+        state.drinkCart[id].qty--;
+        if(state.drinkCart[id].qty<=0) delete state.drinkCart[id];
+        render();
+      }
+      else if(action==='confirmDrinkOrder'){ await submitDrinkOrder(); }
+      else if(action==='tab'){ state.tab = el.dataset.tab; render(); if(state.tab==='balance') refreshMyOrders(); }
+      else if(action==='unlockKitchen'){
+        state.kitchenUnlocked = true;
+        render();
+        prepAlerts();
+        state._unsubOrders = listenOrders(onOrdersUpdate);
+        state._unsubBalances = listenBalances(onBalancesUpdate);
+        if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
+      }
+      else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
+      else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
+      else if(action==='incSnack'){
+        const id = el.dataset.id;
+        if(!state.snackCart[id]) state.snackCart[id] = {qty:1};
+        else state.snackCart[id].qty++;
+        render();
+      }
+      else if(action==='decSnack'){
+        const id = el.dataset.id;
+        state.snackCart[id].qty--;
+        if(state.snackCart[id].qty<=0) delete state.snackCart[id];
+        render();
+      }
+      else if(action==='confirmSnackOrder'){ await submitSnackOrder(); }
+      else if(action==='topup'){
+        const name = el.dataset.name;
+        const amt = prompt('قيمة الدفعة (ج.م) لـ '+name+':');
+        if(amt && !isNaN(amt) && parseFloat(amt)>0){
+          await addToBalance(name, parseFloat(amt));
+          toast('تم تسجيل الدفعة بنجاح');
+        }
+      }
+    };
+  });
+}
+async function doLogin(){
+  const u = document.getElementById('userInput').value.trim();
+  const p = document.getElementById('passInput').value;
+  if(!u || !p){ toast('يرجى إدخال اسم المستخدم وكلمة المرور'); return; }
+  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  try{
+    const ref = db.collection('users').doc(u);
+    const doc = await ref.get();
+    const hashed = await hashPass(p);
+    if(doc.exists){
+      if(doc.data().password !== hashed){
+        toast('كلمة المرور غير صحيحة');
+        return;
+      }
+    } else {
+      await ref.set({password: hashed, createdAt: Date.now()});
+      toast('تم إنشاء الحساب بنجاح');
+    }
+    state.name = u;
+    state.isAdmin = u.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    if(state.isAdmin){ state.role = 'admin'; }
+    if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
+    render();
+    if(state.role==='employee' || state.role==='admin') refreshMyOrders();
+    if(state.role==='admin'){
+      if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
+      if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
+    }
+    if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
+  }catch(e){ toast('حدث خطأ أثناء تسجيل الدخول'); }
+}
+async function buildInstapayFields(){
+  if(state.paymentMethod !== 'instapay') return {ok:true, extra:{}};
+  const phoneEl = document.getElementById('instapayPhoneInput');
+  const fileEl = document.getElementById('instapayFileInput');
+  const phone = phoneEl ? phoneEl.value.trim() : '';
+  const file = fileEl && fileEl.files ? fileEl.files[0] : null;
+  if(!phone){ toast('يرجى كتابة الرقم اللي حوّلت منه'); return {ok:false}; }
+  if(!file){ toast('يرجى إرفاق اسكرين شوت التحويل'); return {ok:false}; }
+  try{
+    const screenshot = await fileToCompressedBase64(file);
+    return {ok:true, extra:{instapaySender: phone, instapayScreenshot: screenshot}};
+  }catch(e){ toast('تعذر قراءة الصورة، حاول تاني'); return {ok:false}; }
+}
+async function submitOrder(){
+  if(Object.keys(state.cart).length===0) return;
+  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  const items = []; let total = 0;
+  for(const id in state.cart){
+    const it = MENU.find(m=>m.id===id);
+    const c = state.cart[id];
+    const price = c.type==='baladi'? it.baladi : it.fransawi;
+    items.push({name:it.name, type:c.type, qty:c.qty, price});
+    total += price*c.qty;
+  }
+  const method = state.paymentMethod === 'cash' ? 'cash' : (state.paymentMethod==='instapay' ? 'instapay' : 'balance');
+  const ip = await buildInstapayFields();
+  if(!ip.ok) return;
+  const order = {
+    id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    name: state.name, items, total, paymentMethod: method, ts: Date.now(), status: 'pending', ...ip.extra
+  };
+  try{
+    await saveOrder(order);
+    if(method === 'balance'){
+      await addToBalance(state.name, -total);
+      state.balance = state.balance - total;
+    }
+    state.cart = {};
+    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
+    render();
+    sendChefEmail(order);
+  }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+}
+async function submitSnackOrder(){
+  if(Object.keys(state.snackCart).length===0) return;
+  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  const items = []; let total = 0;
+  for(const id in state.snackCart){
+    const s = SNACKS.find(m=>m.id===id);
+    const c = state.snackCart[id];
+    items.push({name:s.name, qty:c.qty, price:s.price});
+    total += s.price*c.qty;
+  }
+  const method = state.paymentMethod === 'cash' ? 'cash' : (state.paymentMethod==='instapay' ? 'instapay' : 'balance');
+  const ip = await buildInstapayFields();
+  if(!ip.ok) return;
+  const order = {
+    id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    name: state.name, items, total, kind:'snacks', paymentMethod: method, ts: Date.now(), status: 'pending', ...ip.extra
+  };
+  try{
+    await saveOrder(order);
+    if(method === 'balance'){
+      await addToBalance(state.name, -total);
+      state.balance = state.balance - total;
+    }
+    state.snackCart = {};
+    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
+    render();
+    sendChefEmail(order);
+  }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+}
+async function submitDrinkOrder(){
+  if(Object.keys(state.drinkCart).length===0) return;
+  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  const items = [];
+  for(const id in state.drinkCart){
+    const d = DRINKS.find(m=>m.id===id);
+    items.push({name:d.name, qty:state.drinkCart[id].qty, price:0});
+  }
+  const order = {
+    id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    name: state.name, items, total: 0, kind:'drinks', ts: Date.now(), status: 'pending'
+  };
+  try{
+    await saveOrder(order);
+    state.drinkCart = {};
+    toast('تم إرسال طلب المشروبات إلى المطبخ');
+    render();
+    sendChefEmail(order);
+  }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+}
+async function refreshMyOrders(){
+  const el = document.getElementById('myOrdersList');
+  if(!el || !firebaseReady) { if(el) el.innerHTML = `<div class="empty">ستظهر الطلبات هنا بعد إعداد Firebase</div>`; return; }
+  db.collection('orders').where('name','==',state.name).orderBy('ts','desc').limit(8).get().then(snap=>{
+    const mine = snap.docs.map(d=>d.data());
+    if(mine.length===0){ el.innerHTML = `<div class="empty">لم يتم تقديم أي طلب بعد</div>`; return; }
+    el.innerHTML = mine.map(o=>{
+      const itemsStr = o.items.map(i=>`${i.name} ×${i.qty}`).join('، ');
+      const time = new Date(o.ts).toLocaleString('ar-EG',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'});
+      const label = o.kind==='drinks' ? 'مشروبات ☕' : fmt(o.total);
+      return `<div class="order-row"><div class="top"><span>${label}</span><span>${o.status==='done'?'✅ جاهز':'⏳ قيد التحضير'}</span></div><div class="items">${itemsStr}</div><div class="small">${time}</div></div>`;
+    }).join('');
+  }).catch(()=>{ el.innerHTML = `<div class="empty">تعذر تحميل الطلبات</div>`; });
+}
+function prepAlerts(){
+  try{ if(window.Notification && Notification.permission==='default'){ Notification.requestPermission(); } }catch(e){}
+  try{
+    if(!state._audioCtx){ state._audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(state._audioCtx.state === 'suspended'){ state._audioCtx.resume(); }
+  }catch(e){}
+}
+function playBeep(){
+  try{
+    const ctx = state._audioCtx;
+    if(!ctx) return;
+    const beepOnce = (delay)=>{
+      setTimeout(()=>{
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime+0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.35);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime+0.4);
+      }, delay);
+    };
+    beepOnce(0); beepOnce(450);
+  }catch(e){}
+}
+function onOrdersUpdate(orders){
+  const prevPendingIds = new Set(state.orders.filter(o=>o.status==='pending').map(o=>o.id));
+  const newPending = orders.filter(o=>o.status==='pending' && !prevPendingIds.has(o.id) && state.hasPolledOnce);
+  state.orders = orders;
+  const isKitchenDevice = state.role==='kitchen' && state.kitchenUnlocked;
+  if(newPending.length>0 && isKitchenDevice){
+    toast('تم استلام طلب جديد');
+    playBeep();
+    try{ if(window.Notification && Notification.permission==='granted'){ new Notification('EVRAID - طلب جديد', {body: newPending[0].name}); } }catch(e){}
+  }
+  state.hasPolledOnce = true;
+  if(isKitchenDevice || state.role==='admin') render();
+}
+function onBalancesUpdate(balances){
+  state.balances = balances;
+  if((state.role==='kitchen' && state.kitchenUnlocked) || state.role==='admin') render();
+}
+
+render();
+</script>
+</body>
+</html>

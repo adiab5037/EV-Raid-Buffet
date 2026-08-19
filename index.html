@@ -392,6 +392,11 @@ const DRINKS = [
 const ADMIN_EMAIL = "admin@evraid.com";
 // رقم الإنستاباي اللي هيظهر للموظف عشان يحول عليه
 const INSTAPAY_NUMBER = "ضع_رقم_الانستاباي_هنا";
+// أسماء المستخدمين (زي ما بيكتبوها بالظبط وقت تسجيل الدخول) اللي مسموحلهم بس يشوفوا تاب المشروبات
+const DRINKS_ALLOWED = ["اسم_المدير_1", "اسم_المدير_2", "اسم_المدير_3"];
+function canSeeDrinks(){
+  return DRINKS_ALLOWED.map(n=>n.trim().toLowerCase()).includes((state.name||'').trim().toLowerCase());
+}
 // ============================================================
 
 let state = {
@@ -399,10 +404,11 @@ let state = {
   cart: {}, drinkCart: {}, snackCart: {}, balance: 0, paymentMethod: 'balance',
   orders: [], balances: [],
   outOfStock: new Set(),
+  customMenu: [], customSnacks: [],
   seenOrderIds: new Set(),
   kitchenUnlocked: false,
   hasPolledOnce: false,
-  _unsubOrders: null, _unsubBalances: null, _unsubStock: null,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null,
   _audioCtx: null,
 };
 
@@ -475,6 +481,32 @@ async function toggleStock(id){
     t.set(ref, {ids: next}, {merge:true});
   });
 }
+// أصناف يضيفها الأدمن من التطبيق نفسه (بوفيه أو سناكس)
+function listenCustomItems(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('menuItems').onSnapshot(snap=>{
+    const all = snap.docs.map(d=>d.data());
+    cb(all.filter(i=>i.kind==='menu'), all.filter(i=>i.kind==='snack'));
+  });
+}
+async function addCustomItem(item){
+  if(!firebaseReady) return;
+  await db.collection('menuItems').doc(item.id).set(item);
+}
+async function deleteCustomItem(id){
+  if(!firebaseReady) return;
+  await db.collection('menuItems').doc(id).delete();
+}
+// حفظ/استرجاع جلسة الدخول محليًا عشان مايحتاجش يعمل لوج إن كل مرة
+function saveSession(){
+  try{ localStorage.setItem('evraid_session', JSON.stringify({name: state.name, role: state.role})); }catch(e){}
+}
+function loadSession(){
+  try{ const raw = localStorage.getItem('evraid_session'); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+function clearSession(){
+  try{ localStorage.removeItem('evraid_session'); }catch(e){}
+}
 
 // ---------- Data layer (Firestore) ----------
 async function getBalance(name){
@@ -501,6 +533,10 @@ async function markOrderDone(id){
   if(!firebaseReady) return;
   await db.collection('orders').doc(id).update({status:'done'});
 }
+async function confirmPayment(id){
+  if(!firebaseReady) return;
+  await db.collection('orders').doc(id).update({paymentConfirmed:true});
+}
 
 function listenOrders(cb){
   if(!firebaseReady) return ()=>{};
@@ -524,8 +560,7 @@ function render(){
   else if(!state.name){ c.innerHTML = nameScreen(); }
   else if(state.role === 'employee' || state.role === 'admin'){
     if(state.tab === 'order') c.innerHTML = orderScreen();
-    else if(state.tab === 'snacks') c.innerHTML = snacksScreen();
-    else if(state.tab === 'drinks') c.innerHTML = drinksScreen();
+    else if(state.tab === 'drinks') c.innerHTML = canSeeDrinks() ? drinksScreen() : orderScreen();
     else if(state.tab === 'balance') c.innerHTML = balanceScreen();
     else if(state.tab === 'admin') c.innerHTML = adminScreen();
   }
@@ -547,11 +582,11 @@ function nameScreen(){
   return `
   <div class="card" style="text-align:center;">
     <h2>تسجيل الدخول</h2>
-    <p class="small">أول مرة؟ اكتب اسم مستخدم وكلمة مرور جديدين وسيتم إنشاء حسابك تلقائيًا.</p>
-    <label style="margin-top:10px;">اسم المستخدم</label>
-    <input type="text" id="userInput" placeholder="مثلاً: ahmed.mohamed" />
-    <label style="margin-top:10px;">كلمة المرور</label>
-    <input type="password" id="passInput" placeholder="••••••••" />
+    <p class="small">أول مرة؟ اكتب إيميلك وكلمة مرور جديدة وسيتم إنشاء حسابك تلقائيًا.</p>
+    <label style="margin-top:10px;">الإيميل</label>
+    <input type="email" id="userInput" placeholder="ahmed@evraid.com" />
+    <label style="margin-top:10px;">كلمة المرور (4 حروف على الأقل)</label>
+    <input type="password" id="passInput" placeholder="••••" />
     <button class="btn-main" data-action="doLogin">دخول</button>
     <button class="btn-ghost" style="margin-top:10px;" data-action="backRole">رجوع</button>
   </div>`;
@@ -559,11 +594,15 @@ function nameScreen(){
 function orderScreen(){
   let total = 0;
   for(const id in state.cart){
-    const it = MENU.find(m=>m.id===id);
+    const it = allMenuItems().find(m=>m.id===id);
     const c = state.cart[id];
     total += (c.type==='baladi'? it.baladi : it.fransawi) * c.qty;
   }
-  const available = MENU.filter(it=>!state.outOfStock.has(it.id));
+  for(const id in state.snackCart){
+    const s = allSnackItems().find(m=>m.id===id);
+    total += s.price * state.snackCart[id].qty;
+  }
+  const available = allMenuItems().filter(it=>!state.outOfStock.has(it.id));
   const items = available.map(it=>{
     const c = state.cart[it.id];
     const qty = c? c.qty : 0;
@@ -584,19 +623,36 @@ function orderScreen(){
       </div>`:''}
     </div>`;
   }).join('');
-  const cartCount = Object.keys(state.cart).length;
+  const availableSnacks = allSnackItems().filter(s=>!state.outOfStock.has(s.id));
+  const snackItemsHtml = availableSnacks.map(s=>{
+    const qty = state.snackCart[s.id] ? state.snackCart[s.id].qty : 0;
+    return `
+    <div class="menu-item">
+      <div class="name">${s.name} <span class="small">— ${s.price} ج.م</span></div>
+      ${qty>0? `
+      <div class="stepper">
+        <button data-action="decSnack" data-id="${s.id}">−</button>
+        <span class="qty-badge">${qty}</span>
+        <button data-action="incSnack" data-id="${s.id}">+</button>
+      </div>` : `<button class="price-btn" data-action="incSnack" data-id="${s.id}">إضافة +</button>`}
+    </div>`;
+  }).join('');
+  const cartCount = Object.keys(state.cart).length + Object.keys(state.snackCart).length;
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
   <div class="card"><h2>البوفيه</h2>${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
+  <div class="card"><h2>سناكس</h2>${snackItemsHtml || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
   ${cartCount>0? `${paymentMethodBlock()}
   <div class="cart-bar">
     <span>الإجمالي: ${fmt(total)}</span>
     <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
   </div>`:''}`;
 }
+function allMenuItems(){ return [...MENU, ...state.customMenu]; }
+function allSnackItems(){ return [...SNACKS, ...state.customSnacks]; }
 function paymentMethodBlock(){
   return `
   <div class="card" style="padding:12px 14px;">
@@ -615,39 +671,6 @@ function paymentMethodBlock(){
       <input type="file" id="instapayFileInput" accept="image/*" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" />
     </div>`:''}
   </div>`;
-}
-function snacksScreen(){
-  let total = 0;
-  for(const id in state.snackCart){
-    const s = SNACKS.find(m=>m.id===id);
-    total += s.price * state.snackCart[id].qty;
-  }
-  const available = SNACKS.filter(s=>!state.outOfStock.has(s.id));
-  const items = available.map(s=>{
-    const qty = state.snackCart[s.id] ? state.snackCart[s.id].qty : 0;
-    return `
-    <div class="menu-item">
-      <div class="name">${s.name} <span class="small">— ${s.price} ج.م</span></div>
-      ${qty>0? `
-      <div class="stepper">
-        <button data-action="decSnack" data-id="${s.id}">−</button>
-        <span class="qty-badge">${qty}</span>
-        <button data-action="incSnack" data-id="${s.id}">+</button>
-      </div>` : `<button class="price-btn" data-action="incSnack" data-id="${s.id}">إضافة +</button>`}
-    </div>`;
-  }).join('');
-  const snackCount = Object.keys(state.snackCart).length;
-  return `
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
-    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
-  </div>
-  <div class="card"><h2>سناكس</h2>${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
-  ${snackCount>0? `${paymentMethodBlock()}
-  <div class="cart-bar">
-    <span>الإجمالي: ${fmt(total)}</span>
-    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmSnackOrder">تأكيد الطلب</button>
-  </div>`:''}`;
 }
 function drinksScreen(){
   const available = DRINKS.filter(d=>!state.outOfStock.has(d.id));
@@ -729,8 +752,8 @@ function kitchenScreen(){
 }
 function adminScreen(){
   const pending = state.orders.filter(o=>o.status==='pending');
-  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
-  const historyHtml = state.orders.length? state.orders.slice(0,60).map(o=>orderRow(o,false)).join('') : `<div class="empty">لا يوجد سجل طلبات بعد</div>`;
+  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
+  const historyHtml = state.orders.length? state.orders.slice(0,60).map(o=>orderRow(o,false,true)).join('') : `<div class="empty">لا يوجد سجل طلبات بعد</div>`;
   const balancesHtml = state.balances.length? `
     <table class="balances">
       <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
@@ -741,14 +764,63 @@ function adminScreen(){
           <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>
         </tr>`).join('')}
     </table>` : `<div class="empty">لا توجد أرصدة مسجلة بعد</div>`;
-  // إجمالي المبيعات: بس الأصناف اللي بفلوس (مش المشروبات الفري)
+  // إجمالي المبيعات: بس الأصناف اللي بفلوس (مش المشروبات الفري) — إجمالي / اليوم / الشهر
   const paidOrders = state.orders.filter(o=>o.kind!=='drinks');
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const totalSales = paidOrders.reduce((s,o)=>s+o.total,0);
-  const salesHtml = `<div class="balance-box" style="padding:8px;"><div class="small">إجمالي مبيعات الأصناف المدفوعة (البوفيه والسناكس)</div><div class="amt ok">${fmt(totalSales)}</div></div>`;
+  const todayOrders = paidOrders.filter(o=>o.ts>=startOfDay);
+  const todaySales = todayOrders.reduce((s,o)=>s+o.total,0);
+  const monthSales = paidOrders.filter(o=>o.ts>=startOfMonth).reduce((s,o)=>s+o.total,0);
+  const todayByMethod = {balance:0, cash:0, instapay:0};
+  todayOrders.forEach(o=>{ todayByMethod[o.paymentMethod] = (todayByMethod[o.paymentMethod]||0) + o.total; });
+  const salesHtml = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="balance-box" style="padding:8px;"><div class="small">النهاردة</div><div class="amt ok">${fmt(todaySales)}</div></div>
+      <div class="balance-box" style="padding:8px;"><div class="small">الشهر ده</div><div class="amt ok">${fmt(monthSales)}</div></div>
+      <div class="balance-box" style="padding:8px;"><div class="small">إجمالي كل الوقت</div><div class="amt ok">${fmt(totalSales)}</div></div>
+    </div>
+    <div class="small" style="margin-top:10px;font-weight:700;">تفصيل فلوس النهاردة حسب وسيلة الدفع</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;">
+      <div class="balance-box" style="padding:8px;"><div class="small">💳 من الرصيد</div><div class="amt ok">${fmt(todayByMethod.balance)}</div></div>
+      <div class="balance-box" style="padding:8px;"><div class="small">💵 كاش</div><div class="amt ok">${fmt(todayByMethod.cash)}</div></div>
+      <div class="balance-box" style="padding:8px;"><div class="small">📲 إنستاباي</div><div class="amt ok">${fmt(todayByMethod.instapay)}</div></div>
+    </div>`;
+  // دفعات كاش لسه مستلمتش الفلوس عنها
+  const unpaidCash = state.orders.filter(o=>o.kind!=='drinks' && o.paymentMethod==='cash' && !o.paymentConfirmed);
+  const unpaidCashHtml = unpaidCash.length? unpaidCash.map(o=>orderRow(o,false,true)).join('') : `<div class="empty">مفيش دفعات كاش معلّقة</div>`;
+  // سجل كل موظف: عدد الطلبات، إجمالي المبلغ، والأصناف اللي طلبها
+  const byEmployee = {};
+  paidOrders.forEach(o=>{
+    if(!byEmployee[o.name]) byEmployee[o.name] = {total:0, count:0, items:{}};
+    byEmployee[o.name].total += o.total;
+    byEmployee[o.name].count += 1;
+    o.items.forEach(i=>{
+      byEmployee[o.name].items[i.name] = (byEmployee[o.name].items[i.name]||0) + i.qty;
+    });
+  });
+  const employeeNames = Object.keys(byEmployee).sort((a,b)=>byEmployee[b].total-byEmployee[a].total);
+  const employeeLedgerHtml = employeeNames.length? `
+    <table class="balances">
+      <tr><th>الاسم</th><th>عدد الطلبات</th><th>الإجمالي</th><th>الأصناف</th></tr>
+      ${employeeNames.map(name=>{
+        const e = byEmployee[name];
+        const itemsStr = Object.keys(e.items).map(n=>`${n} ×${e.items[n]}`).join('، ');
+        return `<tr>
+          <td>${name}</td>
+          <td>${e.count}</td>
+          <td style="font-weight:800;">${fmt(e.total)}</td>
+          <td class="small">${itemsStr}</td>
+        </tr>`;
+      }).join('')}
+    </table>` : `<div class="empty">لا يوجد سجل طلبات مدفوعة بعد</div>`;
   const stockableItems = [
-    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه'})),
-    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس'})),
-    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات'})),
+    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false})),
+    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true})),
+    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false})),
+    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true})),
+    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false})),
   ];
   const stockHtml = `
     <table class="balances">
@@ -756,24 +828,42 @@ function adminScreen(){
       ${stockableItems.map(it=>{
         const isOut = state.outOfStock.has(it.id);
         return `<tr>
-          <td>${it.name} <span class="small">(${it.cat})</span></td>
+          <td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
           <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
-          <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف (أوت أوف ستوك)'}</button></td>
+          <td>
+            <button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>
+            ${it.custom? `<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}
+          </td>
         </tr>`;
       }).join('')}
     </table>`;
+  const addItemFormHtml = `
+    <div style="margin-top:14px;">
+      <label>القسم</label>
+      <select id="newItemCat" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);">
+        <option value="menu">بوفيه</option>
+        <option value="snack">سناكس</option>
+      </select>
+      <label style="margin-top:8px;">اسم الصنف</label>
+      <input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
+      <label style="margin-top:8px;">السعر</label>
+      <input type="number" id="newItemPrice" placeholder="مثلاً: 20" />
+      <button class="btn-main" style="margin-top:10px;" data-action="addMenuItem">إضافة الصنف</button>
+    </div>`;
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">لوحة التحكم</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
   <div class="card"><h2>إجمالي المبيعات</h2>${salesHtml}</div>
+  <div class="card"><h2>دفعات كاش محتاجة تأكيد</h2><p class="small" style="margin-top:-6px;">دوس "تأكيد استلام الفلوس" بعد ما توصلك الفلوس فعليًا</p>${unpaidCashHtml}</div>
+  <div class="card"><h2>سجل كل موظف</h2><p class="small" style="margin-top:-6px;">إجمالي كل حد وإيه اللي طلبه (الأصناف المدفوعة بس)</p>${employeeLedgerHtml}</div>
   <div class="card"><h2>الطلبات الجديدة</h2>${ordersHtml}</div>
   <div class="card"><h2>سجل كل الطلبات</h2><p class="small" style="margin-top:-6px;">آخر 60 طلب، الأحدث أولًا</p>${historyHtml}</div>
   <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>
-  <div class="card"><h2>إدارة المخزون</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه</p>${stockHtml}</div>`;
+  <div class="card"><h2>إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockHtml}${addItemFormHtml}</div>`;
 }
-function orderRow(o, isPending){
+function orderRow(o, isPending, isAdminView){
   const itemsStr = o.items.map(i=> i.type ? `${i.name} (${i.type==='baladi'?'بلدي':'فرنساوي'}) ×${i.qty}` : `${i.name} ×${i.qty}`).join('، ');
   const time = new Date(o.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
   const isDrinks = o.kind === 'drinks';
@@ -782,13 +872,20 @@ function orderRow(o, isPending){
   const instapayInfo = (!isDrinks && o.paymentMethod==='instapay') ? `
     <div class="small" style="margin-top:6px;">حوّل من: ${o.instapaySender||''}</div>
     ${o.instapayScreenshot? `<img src="${o.instapayScreenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}` : '';
+  const needsPaymentConfirm = isAdminView && !isDrinks && o.paymentMethod==='cash' && !o.paymentConfirmed;
+  const paymentBadge = (!isDrinks && o.paymentMethod==='cash') ? `
+    <div class="small" style="margin-top:4px;color:${o.paymentConfirmed?'var(--green-dark)':'#c53030'};font-weight:700;">${o.paymentConfirmed? '✓ الفلوس استلمت':'⏳ لسه مستلمتش الفلوس'}</div>` : '';
   return `
   <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}">
     <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
     <div class="items">${itemsStr}</div>
     <div class="small">${time}${payBadge? ' · '+payBadge : ''}</div>
+    ${paymentBadge}
     ${instapayInfo}
-    ${isPending? `<div class="actions"><button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button></div>`:''}
+    <div class="actions">
+      ${isPending? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
+      ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
+    </div>
   </div>`;
 }
 function renderTabs(){
@@ -796,15 +893,13 @@ function renderTabs(){
   if(!state.role || !state.name){ tb.innerHTML=''; return; }
   if(state.role==='employee'){
     tb.innerHTML = `
-      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه</button>
-      <button class="tab ${state.tab==='snacks'?'active':''}" data-action="tab" data-tab="snacks"><span class="ic">🍫</span>سناكس</button>
-      <button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>
+      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه وسناكس</button>
+      ${canSeeDrinks()? `<button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>`:''}
       <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>`;
   } else if(state.role==='admin'){
     tb.innerHTML = `
-      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه</button>
-      <button class="tab ${state.tab==='snacks'?'active':''}" data-action="tab" data-tab="snacks"><span class="ic">🍫</span>سناكس</button>
-      <button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>
+      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه وسناكس</button>
+      ${canSeeDrinks()? `<button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>`:''}
       <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>
       <button class="tab ${state.tab==='admin'?'active':''}" data-action="tab" data-tab="admin"><span class="ic">🛠️</span>لوحة التحكم</button>`;
   } else {
@@ -820,9 +915,11 @@ function bindEvents(){
       else if(action==='doLogin'){ await doLogin(); }
       else if(action==='switchUser'){
         state.name=''; state.role=null; state.cart={}; state.drinkCart={}; state.snackCart={}; state.isAdmin=false;
+        clearSession();
         if(state._unsubOrders){ state._unsubOrders(); state._unsubOrders=null; }
         if(state._unsubBalances){ state._unsubBalances(); state._unsubBalances=null; }
         if(state._unsubStock){ state._unsubStock(); state._unsubStock=null; }
+        if(state._unsubCustomItems){ state._unsubCustomItems(); state._unsubCustomItems=null; }
         render();
       }
       else if(action==='setPayment'){ state.paymentMethod = el.dataset.method; render(); }
@@ -863,6 +960,7 @@ function bindEvents(){
         if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
       }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
+      else if(action==='confirmPayment'){ await confirmPayment(el.dataset.id); }
       else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
       else if(action==='incSnack'){
         const id = el.dataset.id;
@@ -876,7 +974,11 @@ function bindEvents(){
         if(state.snackCart[id].qty<=0) delete state.snackCart[id];
         render();
       }
-      else if(action==='confirmSnackOrder'){ await submitSnackOrder(); }
+      else if(action==='confirmSnackOrder'){ await submitOrder(); }
+      else if(action==='addMenuItem'){ await handleAddMenuItem(); }
+      else if(action==='deleteItem'){
+        if(confirm('متأكد إنك عايز تحذف الصنف ده؟')) await deleteCustomItem(el.dataset.id);
+      }
       else if(action==='topup'){
         const name = el.dataset.name;
         const amt = prompt('قيمة الدفعة (ج.م) لـ '+name+':');
@@ -888,10 +990,25 @@ function bindEvents(){
     };
   });
 }
+async function afterLogin(){
+  if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
+  render();
+  if(state.role==='employee' || state.role==='admin') refreshMyOrders();
+  if(state.role==='admin'){
+    if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
+    if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
+  }
+  if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
+  if(!state._unsubCustomItems) state._unsubCustomItems = listenCustomItems((menuItems, snackItems)=>{
+    state.customMenu = menuItems; state.customSnacks = snackItems; render();
+  });
+}
 async function doLogin(){
   const u = document.getElementById('userInput').value.trim();
   const p = document.getElementById('passInput').value;
-  if(!u || !p){ toast('يرجى إدخال اسم المستخدم وكلمة المرور'); return; }
+  if(!u || !p){ toast('يرجى إدخال الإيميل وكلمة المرور'); return; }
+  if(!/^[^\s@]+@evraid\.com$/i.test(u)){ toast('لازم تسجل بإيميل بصيغة اسم@evraid.com'); return; }
+  if(p.length < 4){ toast('كلمة المرور لازم تكون 4 حروف على الأقل'); return; }
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
   try{
     const ref = db.collection('users').doc(u);
@@ -909,14 +1026,8 @@ async function doLogin(){
     state.name = u;
     state.isAdmin = u.toLowerCase() === ADMIN_EMAIL.toLowerCase();
     if(state.isAdmin){ state.role = 'admin'; }
-    if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
-    render();
-    if(state.role==='employee' || state.role==='admin') refreshMyOrders();
-    if(state.role==='admin'){
-      if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
-      if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
-    }
-    if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
+    saveSession();
+    await afterLogin();
   }catch(e){ toast('حدث خطأ أثناء تسجيل الدخول'); }
 }
 async function buildInstapayFields(){
@@ -932,42 +1043,40 @@ async function buildInstapayFields(){
     return {ok:true, extra:{instapaySender: phone, instapayScreenshot: screenshot}};
   }catch(e){ toast('تعذر قراءة الصورة، حاول تاني'); return {ok:false}; }
 }
+async function handleAddMenuItem(){
+  const catEl = document.getElementById('newItemCat');
+  const nameEl = document.getElementById('newItemName');
+  const priceEl = document.getElementById('newItemPrice');
+  const cat = catEl ? catEl.value : 'menu';
+  const name = nameEl ? nameEl.value.trim() : '';
+  const price = priceEl ? Number(priceEl.value) : NaN;
+  if(!name){ toast('اكتب اسم الصنف'); return; }
+  if(!price || price<=0){ toast('اكتب سعر صحيح'); return; }
+  const item = {
+    id: 'custom_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    name, addedAt: Date.now(),
+  };
+  if(cat==='menu'){ item.baladi = price; item.fransawi = null; item.kind='menu'; }
+  else { item.price = price; item.kind='snack'; }
+  try{
+    await addCustomItem(item);
+    toast('تم إضافة الصنف');
+    render();
+  }catch(e){ toast('حدث خطأ أثناء الإضافة'); }
+}
 async function submitOrder(){
-  if(Object.keys(state.cart).length===0) return;
+  if(Object.keys(state.cart).length===0 && Object.keys(state.snackCart).length===0) return;
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
   const items = []; let total = 0;
   for(const id in state.cart){
-    const it = MENU.find(m=>m.id===id);
+    const it = allMenuItems().find(m=>m.id===id);
     const c = state.cart[id];
     const price = c.type==='baladi'? it.baladi : it.fransawi;
     items.push({name:it.name, type:c.type, qty:c.qty, price});
     total += price*c.qty;
   }
-  const method = state.paymentMethod === 'cash' ? 'cash' : (state.paymentMethod==='instapay' ? 'instapay' : 'balance');
-  const ip = await buildInstapayFields();
-  if(!ip.ok) return;
-  const order = {
-    id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total, paymentMethod: method, ts: Date.now(), status: 'pending', ...ip.extra
-  };
-  try{
-    await saveOrder(order);
-    if(method === 'balance'){
-      await addToBalance(state.name, -total);
-      state.balance = state.balance - total;
-    }
-    state.cart = {};
-    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
-    render();
-    sendChefEmail(order);
-  }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
-}
-async function submitSnackOrder(){
-  if(Object.keys(state.snackCart).length===0) return;
-  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
-  const items = []; let total = 0;
   for(const id in state.snackCart){
-    const s = SNACKS.find(m=>m.id===id);
+    const s = allSnackItems().find(m=>m.id===id);
     const c = state.snackCart[id];
     items.push({name:s.name, qty:c.qty, price:s.price});
     total += s.price*c.qty;
@@ -977,7 +1086,7 @@ async function submitSnackOrder(){
   if(!ip.ok) return;
   const order = {
     id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total, kind:'snacks', paymentMethod: method, ts: Date.now(), status: 'pending', ...ip.extra
+    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', ts: Date.now(), status: 'pending', ...ip.extra
   };
   try{
     await saveOrder(order);
@@ -985,6 +1094,7 @@ async function submitSnackOrder(){
       await addToBalance(state.name, -total);
       state.balance = state.balance - total;
     }
+    state.cart = {};
     state.snackCart = {};
     toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
     render();
@@ -1069,6 +1179,21 @@ function onBalancesUpdate(balances){
   state.balances = balances;
   if((state.role==='kitchen' && state.kitchenUnlocked) || state.role==='admin') render();
 }
+
+// استرجاع الجلسة المحفوظة (لو المستخدم سجل دخول قبل كده على نفس الجهاز)
+(function restoreSession(){
+  const saved = loadSession();
+  if(saved && saved.name && saved.role){
+    state.name = saved.name;
+    state.role = saved.role;
+    state.isAdmin = saved.name.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    if(firebaseReady){ afterLogin(); } else {
+      const check = setInterval(()=>{
+        if(firebaseReady){ clearInterval(check); afterLogin(); }
+      }, 200);
+    }
+  }
+})();
 
 render();
 </script>

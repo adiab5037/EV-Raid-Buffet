@@ -666,7 +666,8 @@ function paymentMethodBlock(){
     <div style="margin-top:12px;">
       <div class="small" style="margin-bottom:6px;">حوّل على رقم الإنستاباي: <b style="color:var(--navy);direction:ltr;display:inline-block;">${INSTAPAY_NUMBER}</b></div>
       <label style="margin-top:8px;">الرقم اللي حوّلت منه</label>
-      <input type="text" id="instapayPhoneInput" placeholder="01xxxxxxxxx" />
+      <input type="tel" id="instapayPhoneInput" placeholder="01xxxxxxxxx" maxlength="11" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,11)" />
+      <div class="small" style="margin-top:4px;">أرقام بس، 11 رقم بالظبط</div>
       <label style="margin-top:10px;">اسكرين شوت التحويل</label>
       <input type="file" id="instapayFileInput" accept="image/*" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" />
     </div>`:''}
@@ -1037,6 +1038,7 @@ async function buildInstapayFields(){
   const phone = phoneEl ? phoneEl.value.trim() : '';
   const file = fileEl && fileEl.files ? fileEl.files[0] : null;
   if(!phone){ toast('يرجى كتابة الرقم اللي حوّلت منه'); return {ok:false}; }
+  if(!/^[0-9]{11}$/.test(phone)){ toast('الرقم لازم يكون أرقام بس ومكوّن من 11 رقم'); return {ok:false}; }
   if(!file){ toast('يرجى إرفاق اسكرين شوت التحويل'); return {ok:false}; }
   try{
     const screenshot = await fileToCompressedBase64(file);

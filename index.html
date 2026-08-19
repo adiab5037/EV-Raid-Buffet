@@ -791,11 +791,13 @@ function adminScreen(){
   // دفعات كاش لسه مستلمتش الفلوس عنها
   const unpaidCash = state.orders.filter(o=>o.kind!=='drinks' && o.paymentMethod==='cash' && !o.paymentConfirmed);
   const unpaidCashHtml = unpaidCash.length? unpaidCash.map(o=>orderRow(o,false,true)).join('') : `<div class="empty">مفيش دفعات كاش معلّقة</div>`;
-  // سجل كل موظف: عدد الطلبات، إجمالي المبلغ، والأصناف اللي طلبها
+  // سجل كل موظف: عدد الطلبات، إجمالي المبلغ (النهاردة/الشهر/كل الوقت)، والأصناف اللي طلبها
   const byEmployee = {};
   paidOrders.forEach(o=>{
-    if(!byEmployee[o.name]) byEmployee[o.name] = {total:0, count:0, items:{}};
+    if(!byEmployee[o.name]) byEmployee[o.name] = {total:0, today:0, month:0, count:0, items:{}};
     byEmployee[o.name].total += o.total;
+    if(o.ts>=startOfDay) byEmployee[o.name].today += o.total;
+    if(o.ts>=startOfMonth) byEmployee[o.name].month += o.total;
     byEmployee[o.name].count += 1;
     o.items.forEach(i=>{
       byEmployee[o.name].items[i.name] = (byEmployee[o.name].items[i.name]||0) + i.qty;
@@ -804,13 +806,15 @@ function adminScreen(){
   const employeeNames = Object.keys(byEmployee).sort((a,b)=>byEmployee[b].total-byEmployee[a].total);
   const employeeLedgerHtml = employeeNames.length? `
     <table class="balances">
-      <tr><th>الاسم</th><th>عدد الطلبات</th><th>الإجمالي</th><th>الأصناف</th></tr>
+      <tr><th>الاسم</th><th>عدد الطلبات</th><th>النهاردة</th><th>الشهر ده</th><th>كل الوقت</th><th>الأصناف</th></tr>
       ${employeeNames.map(name=>{
         const e = byEmployee[name];
         const itemsStr = Object.keys(e.items).map(n=>`${n} ×${e.items[n]}`).join('، ');
         return `<tr>
           <td>${name}</td>
           <td>${e.count}</td>
+          <td style="font-weight:800;">${fmt(e.today)}</td>
+          <td style="font-weight:800;">${fmt(e.month)}</td>
           <td style="font-weight:800;">${fmt(e.total)}</td>
           <td class="small">${itemsStr}</td>
         </tr>`;

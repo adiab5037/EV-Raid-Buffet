@@ -871,9 +871,10 @@ function kitchenScreen(){
     </table>`;
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <h2 style="margin:0;">الطلبات الجديدة</h2>
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
-  <div class="card">${ordersHtml}</div>
+  <div class="card"><h2>الطلبات الجديدة</h2>${ordersHtml}</div>
   ${done.length? `<div class="card"><h2>تم تحضيرها</h2>${doneHtml}</div>`:''}
   <div class="card"><h2>طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>

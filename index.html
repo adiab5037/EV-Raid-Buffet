@@ -785,7 +785,7 @@ function balanceCardWithActions(){
       <label style="margin-top:10px;">صورة إثبات التحويل</label>
       <input type="file" id="balanceReqFile" accept="image/*" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--line);background:var(--card-2);" />
       <button class="btn-main" data-action="submitBalanceRequest" data-kind="charge">إرسال طلب الشحن</button>
-      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">إلغاء</button>
+      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">◀ رجوع</button>
     </div>` : '';
   const withdrawFormHtml = state.topupMode==='withdraw' ? `
     <div class="card">
@@ -796,7 +796,7 @@ function balanceCardWithActions(){
       <label style="margin-top:10px;">الرقم الذي ستستلم عليه المبلغ</label>
       <input type="tel" id="balanceReqPhone" placeholder="01xxxxxxxxx" maxlength="11" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,11)" />
       <button class="btn-main" data-action="submitBalanceRequest" data-kind="withdraw">إرسال طلب السحب</button>
-      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">إلغاء</button>
+      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">◀ رجوع</button>
     </div>` : '';
   return `
   <div class="card balance-box">

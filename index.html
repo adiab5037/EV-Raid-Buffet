@@ -391,17 +391,31 @@ const DRINKS = [
 ];
 
 // ============================================================
-// غيّر السطر ده لإيميل/يوزر نيم الأدمن اللي هيدخل بيه (حساس لحالة الأحرف؟ لأ)
-const ADMIN_EMAIL = "admin@evraid.com";
-// رقم الإنستاباي اللي هيظهر للموظف عشان يحول عليه
-const INSTAPAY_NUMBER = "ضع_رقم_الانستاباي_هنا";
-// إيميلات المستخدمين (بالظبط زي ما بيكتبوها وقت تسجيل الدخول) اللي مسموحلهم بس يشوفوا تاب المشروبات — الباقي يشوف الأكل والسناكس بس
+// إيميلات المديرين اللي بيدخلوا كأدمن (بالظبط زي ما هيكتبوها وقت تسجيل الدخول)
+const ADMIN_EMAILS = ["sherif@evraid.com", "osama@evraid.com", "shazly@evraid.com", "noha@evraid.com"];
+// إيميلات فريق المطبخ (الشيف) اللي بيدخلوا كمطبخ
+const KITCHEN_EMAILS = ["diaa@evraid.com"];
+function roleForEmail(email){
+  const e = (email||'').trim().toLowerCase();
+  if(ADMIN_EMAILS.map(x=>x.trim().toLowerCase()).includes(e)) return 'admin';
+  if(KITCHEN_EMAILS.map(x=>x.trim().toLowerCase()).includes(e)) return 'kitchen';
+  return 'employee';
+}
+// رقم الإنستاباي اللي هيظهر للموظف عشان يحول عليه (رقم الشيف)
+const INSTAPAY_NUMBER = "01129135901";
+// إيميلات المستخدمين (بالظبط زي ما بيكتبوها وقت تسجيل الدخول) اللي مسموحلهم يشوفوا تاب المشروبات — الأدمن يشوفها دايمًا تلقائيًا
 const DRINKS_ALLOWED = ["manager1@evraid.com", "manager2@evraid.com", "manager3@evraid.com"];
 function canSeeDrinks(){
+  if(state.role==='admin') return true;
   return DRINKS_ALLOWED.map(n=>n.trim().toLowerCase()).includes((state.name||'').trim().toLowerCase());
 }
-// الباسورد اللي هيدخل بيه فريق المطبخ (الشيف) على "دخول المطبخ" — غيّره لأي حاجة تحبها
-const KITCHEN_PIN = "1234";
+// إيميلات باقي الموظفين المسموح لهم بالدخول (غير الأدمن والمطبخ فوق) — لازم تضيف إيميل كل موظف هنا قبل ما يقدر يدخل
+const EMPLOYEE_EMAILS = ["ضع_ايميلات_الموظفين_هنا@evraid.com"];
+function isAllowedEmail(email){
+  const e = (email||'').trim().toLowerCase();
+  const all = [...ADMIN_EMAILS, ...KITCHEN_EMAILS, ...EMPLOYEE_EMAILS].map(x=>x.trim().toLowerCase());
+  return all.includes(e);
+}
 // ============================================================
 
 let state = {
@@ -409,11 +423,12 @@ let state = {
   cart: {}, drinkCart: {}, snackCart: {}, balance: 0, paymentMethod: 'balance',
   orders: [], balances: [],
   outOfStock: new Set(),
-  customMenu: [], customSnacks: [], priceOverrides: {},
+  customMenu: [], customSnacks: [], customDrinks: [], priceOverrides: {},
+  topupMode: null, balanceRequests: [],
   seenOrderIds: new Set(),
   kitchenUnlocked: false,
   hasPolledOnce: false,
-  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null,
   _audioCtx: null,
 };
 
@@ -491,7 +506,7 @@ function listenCustomItems(cb){
   if(!firebaseReady) return ()=>{};
   return db.collection('menuItems').onSnapshot(snap=>{
     const all = snap.docs.map(d=>d.data());
-    cb(all.filter(i=>i.kind==='menu'), all.filter(i=>i.kind==='snack'));
+    cb(all.filter(i=>i.kind==='menu'), all.filter(i=>i.kind==='snack'), all.filter(i=>i.kind==='drinks'));
   });
 }
 async function addCustomItem(item){
@@ -554,6 +569,32 @@ async function addToBalance(name, delta){
     t.set(ref, {value: cur + delta}, {merge:true});
   });
 }
+// طلبات شحن/سحب الرصيد اللي الموظف بيبعتها، وبتحتاج موافقة الشيف أو الأدمن
+async function saveBalanceRequest(req){
+  if(!firebaseReady) return;
+  await db.collection('balanceRequests').doc(req.id).set(req);
+}
+function listenPendingBalanceRequests(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('balanceRequests').where('status','==','pending').onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()).sort((a,b)=>b.ts-a.ts));
+  });
+}
+function listenMyBalanceRequests(name, cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('balanceRequests').where('name','==',name).onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()).sort((a,b)=>b.ts-a.ts));
+  });
+}
+async function approveBalanceRequest(id){
+  if(!firebaseReady) return;
+  const ref = db.collection('balanceRequests').doc(id);
+  const doc = await ref.get();
+  if(!doc.exists || doc.data().status !== 'pending') return;
+  const req = doc.data();
+  await ref.update({status:'approved'});
+  await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount);
+}
 async function saveOrder(order){
   if(!firebaseReady) return;
   await db.collection('orders').doc(order.id).set(order);
@@ -585,40 +626,29 @@ function listenBalances(cb){
 // ---------- Render ----------
 function render(){
   const c = document.getElementById('content');
-  if(!state.role){ c.innerHTML = roleScreen(); }
-  else if(!state.name){ c.innerHTML = nameScreen(); }
+  if(!state.name){ c.innerHTML = nameScreen(); }
   else if(state.role === 'employee' || state.role === 'admin'){
     if(state.tab === 'order') c.innerHTML = orderScreen();
     else if(state.tab === 'drinks') c.innerHTML = canSeeDrinks() ? drinksScreen() : orderScreen();
     else if(state.tab === 'balance') c.innerHTML = balanceScreen();
     else if(state.tab === 'admin') c.innerHTML = adminScreen();
   }
-  else { c.innerHTML = state.kitchenUnlocked ? kitchenScreen() : kitchenGate(); }
+  else { c.innerHTML = kitchenScreen(); }
   renderTabs();
   bindEvents();
 }
 
-function roleScreen(){
-  return `
-  <div class="card" style="text-align:center;">
-    <h2>الرجاء تحديد صفة الدخول</h2>
-    <p class="small">يرجى اختيار صفتك لعرض الصفحة المناسبة</p>
-    <button class="btn-main" data-action="role" data-role="employee">👤 موظف — تقديم طلب</button>
-    <button class="btn-main" style="background:linear-gradient(180deg,var(--navy),var(--navy-deep));color:#fff;margin-top:12px;" data-action="role" data-role="kitchen">🍳 فريق المطبخ</button>
-  </div>`;
-}
 function nameScreen(){
   const lastEmail = (function(){ try{ return localStorage.getItem('evraid_last_email')||''; }catch(e){ return ''; } })();
   return `
   <div class="card" style="text-align:center;">
     <h2>تسجيل الدخول</h2>
-    <p class="small">أول مرة؟ اكتب إيميلك وكلمة مرور جديدة وسيتم إنشاء حسابك تلقائيًا.</p>
+    <p class="small">أول استخدام؟ سيتم إنشاء حسابك تلقائيًا بإيميلك وكلمة المرور التي تحددها.</p>
     <label style="margin-top:10px;">الإيميل</label>
     <input type="email" id="userInput" placeholder="ahmed@evraid.com" value="${lastEmail}" autocomplete="username" />
     <label style="margin-top:10px;">كلمة المرور (4 حروف على الأقل)</label>
     <input type="password" id="passInput" placeholder="••••" autocomplete="current-password" />
     <button class="btn-main" data-action="doLogin">دخول</button>
-    <button class="btn-ghost" style="margin-top:10px;" data-action="backRole">رجوع</button>
   </div>`;
 }
 function orderScreen(){
@@ -708,8 +738,9 @@ function paymentMethodBlock(){
     </div>`:''}
   </div>`;
 }
+function allDrinksItems(){ return [...DRINKS, ...state.customDrinks]; }
 function drinksScreen(){
-  const available = DRINKS.filter(d=>!state.outOfStock.has(d.id));
+  const available = allDrinksItems().filter(d=>!state.outOfStock.has(d.id));
   const items = available.map(d=>{
     const qty = state.drinkCart[d.id] ? state.drinkCart[d.id].qty : 0;
     return `
@@ -740,30 +771,53 @@ function drinksScreen(){
     <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmDrinkOrder">تأكيد الطلب</button>
   </div>`:''}`;
 }
-function balanceScreen(){
+function balanceCardWithActions(){
   const owed = state.balance < 0;
+  const topupFormHtml = state.topupMode==='charge' ? `
+    <div class="card">
+      <h2>شحن الرصيد</h2>
+      <p class="small" style="margin-top:-6px;">حوّل المبلغ على رقم الشيف، ثم أدخل بيانات التحويل لإرسال طلب الشحن للمراجعة والاعتماد.</p>
+      <div class="small" style="margin:10px 0;background:var(--card-2);border-radius:8px;padding:10px 12px;">رقم الشيف: <b style="color:var(--navy);direction:ltr;display:inline-block;">${INSTAPAY_NUMBER}</b></div>
+      <label>المبلغ الذي تم تحويله</label>
+      <input type="number" id="balanceReqAmount" placeholder="مثلاً: 100" />
+      <label style="margin-top:10px;">الرقم الذي تم التحويل منه</label>
+      <input type="tel" id="balanceReqPhone" placeholder="01xxxxxxxxx" maxlength="11" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,11)" />
+      <label style="margin-top:10px;">صورة إثبات التحويل</label>
+      <input type="file" id="balanceReqFile" accept="image/*" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--line);background:var(--card-2);" />
+      <button class="btn-main" data-action="submitBalanceRequest" data-kind="charge">إرسال طلب الشحن</button>
+      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">إلغاء</button>
+    </div>` : '';
+  const withdrawFormHtml = state.topupMode==='withdraw' ? `
+    <div class="card">
+      <h2>سحب الرصيد</h2>
+      <p class="small" style="margin-top:-6px;">أدخل المبلغ المطلوب سحبه والرقم الذي ترغب في استلام المبلغ عليه. سيتم التحويل بعد المراجعة والاعتماد.</p>
+      <label>المبلغ المطلوب سحبه</label>
+      <input type="number" id="balanceReqAmount" placeholder="مثلاً: 50" />
+      <label style="margin-top:10px;">الرقم الذي ستستلم عليه المبلغ</label>
+      <input type="tel" id="balanceReqPhone" placeholder="01xxxxxxxxx" maxlength="11" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,11)" />
+      <button class="btn-main" data-action="submitBalanceRequest" data-kind="withdraw">إرسال طلب السحب</button>
+      <button class="btn-ghost" style="margin-top:10px;" data-action="closeTopup">إلغاء</button>
+    </div>` : '';
+  return `
+  <div class="card balance-box">
+    <div class="small">${owed? 'المستحق عليك' : 'رصيدك'}</div>
+    <div class="amt ${owed? 'owe':'ok'}">${fmt(Math.abs(state.balance))}</div>
+    <div class="small" style="margin-top:6px;">${owed? 'يُخصم كل طلب من رصيدك تلقائيًا.' : 'رصيدك موجب حاليًا.'}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn-ghost" style="flex:1;text-align:center;" data-action="openTopup">💳 شحن الرصيد</button>
+      <button class="btn-ghost" style="flex:1;text-align:center;" data-action="openWithdraw">🏦 سحب الرصيد</button>
+    </div>
+  </div>
+  ${topupFormHtml}${withdrawFormHtml}`;
+}
+function balanceScreen(){
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
-  <div class="card balance-box">
-    <div class="small">${owed? 'المستحق عليك' : 'رصيدك'}</div>
-    <div class="amt ${owed? 'owe':'ok'}">${fmt(Math.abs(state.balance))}</div>
-    <div class="small" style="margin-top:6px;">${owed? 'يُخصم كل طلب من رصيدك تلقائيًا. عند سداد المبلغ نقدًا، يقوم المطبخ بتسجيله وتحديث رصيدك.' : 'رصيدك موجب حاليًا. يُرجى تسوية المبلغ نقدًا عند المطبخ عندما ينفد.'}</div>
-  </div>
+  ${balanceCardWithActions()}
   <div class="card"><h2>آخر طلباتي</h2><div id="myOrdersList" class="small">جارِ التحميل...</div></div>`;
-}
-function kitchenGate(){
-  return `
-  <div class="card" style="text-align:center;">
-    <h2>لوحة المطبخ</h2>
-    <p class="small">هذا القسم مخصص لفريق المطبخ فقط</p>
-    <label style="margin-top:10px;">الباسورد</label>
-    <input type="password" id="kitchenPinInput" placeholder="••••" />
-    <button class="btn-main" data-action="unlockKitchen">دخول</button>
-    <button class="btn-ghost" style="margin-top:10px;" data-action="backRole">رجوع</button>
-  </div>`;
 }
 function kitchenScreen(){
   const pending = state.orders.filter(o=>o.status==='pending');
@@ -780,6 +834,15 @@ function kitchenScreen(){
           <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>
         </tr>`).join('')}
     </table>` : `<div class="empty">لا توجد أرصدة مسجلة بعد</div>`;
+  // طلبات شحن/سحب رصيد محتاجة موافقة
+  const pendingBalanceReqs = state.balanceRequests||[];
+  const balanceReqsHtml = pendingBalanceReqs.length? pendingBalanceReqs.map(r=>`
+    <div class="order-row">
+      <div class="top"><span>${r.name}</span><span>${r.kind==='charge'?'شحن':'سحب'} ${fmt(r.amount)}</span></div>
+      <div class="small">${r.kind==='charge'?'حوّل من':'يستلم على'}: ${r.phone}</div>
+      ${r.screenshot? `<img src="${r.screenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}
+      <div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>
+    </div>`).join('') : `<div class="empty">لا توجد طلبات رصيد معلّقة</div>`;
   // تعديل أسعار كل الأصناف — الشيف بس هو اللي بيشوف القسم ده
   const priceRows = [
     ...allMenuItems().map(it=>({...it, cat:'بوفيه'})),
@@ -812,8 +875,52 @@ function kitchenScreen(){
   </div>
   <div class="card">${ordersHtml}</div>
   ${done.length? `<div class="card"><h2>تم تحضيرها</h2>${doneHtml}</div>`:''}
+  <div class="card"><h2>طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>
-  <div class="card"><h2>تعديل أسعار المنيو</h2><p class="small" style="margin-top:-6px;">غيّر السعر واضغط حفظ، هيتحدث فورًا لكل الموظفين</p>${priceEditHtml}</div>`;
+  <div class="card"><h2>تعديل أسعار المنيو</h2><p class="small" style="margin-top:-6px;">غيّر السعر واضغط حفظ، هيتحدث فورًا لكل الموظفين</p>${priceEditHtml}</div>
+  <div class="card"><h2>إضافة/حذف أصناف</h2><p class="small" style="margin-top:-6px;">ضيف صنف جديد بوفيه أو سناكس أو مشروبات، أو أوقف/احذف أي صنف موجود</p>${stockManagementHtml()}</div>`;
+}
+function stockManagementHtml(){
+  const stockableItems = [
+    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false})),
+    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true})),
+    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false})),
+    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true})),
+    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false})),
+    ...state.customDrinks.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:true})),
+  ];
+  const stockHtml = `
+    <table class="balances">
+      <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
+      ${stockableItems.map(it=>{
+        const isOut = state.outOfStock.has(it.id);
+        return `<tr>
+          <td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
+          <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
+          <td>
+            <button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>
+            ${it.custom? `<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}
+          </td>
+        </tr>`;
+      }).join('')}
+    </table>`;
+  const addItemFormHtml = `
+    <div style="margin-top:14px;">
+      <label>القسم</label>
+      <select id="newItemCat" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" onchange="document.getElementById('newItemPriceWrap').style.display = this.value==='drinks' ? 'none' : 'block'">
+        <option value="menu">بوفيه</option>
+        <option value="snack">سناكس</option>
+        <option value="drinks">مشروبات</option>
+      </select>
+      <label style="margin-top:8px;">اسم الصنف</label>
+      <input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
+      <div id="newItemPriceWrap">
+        <label style="margin-top:8px;">السعر</label>
+        <input type="number" id="newItemPrice" placeholder="مثلاً: 20" />
+      </div>
+      <button class="btn-main" style="margin-top:10px;" data-action="addMenuItem">إضافة الصنف</button>
+    </div>`;
+  return `${stockHtml}${addItemFormHtml}`;
 }
 function adminScreen(){
   const pending = state.orders.filter(o=>o.status==='pending');
@@ -855,6 +962,15 @@ function adminScreen(){
   // دفعات كاش لسه مستلمتش الفلوس عنها
   const unpaidCash = state.orders.filter(o=>o.kind!=='drinks' && o.paymentMethod==='cash' && !o.paymentConfirmed);
   const unpaidCashHtml = unpaidCash.length? unpaidCash.map(o=>orderRow(o,false,true)).join('') : `<div class="empty">مفيش دفعات كاش معلّقة</div>`;
+  // طلبات شحن/سحب رصيد محتاجة موافقة
+  const pendingBalanceReqs = state.balanceRequests||[];
+  const balanceReqsHtml = pendingBalanceReqs.length? pendingBalanceReqs.map(r=>`
+    <div class="order-row">
+      <div class="top"><span>${r.name}</span><span>${r.kind==='charge'?'شحن':'سحب'} ${fmt(r.amount)}</span></div>
+      <div class="small">${r.kind==='charge'?'حوّل من':'يستلم على'}: ${r.phone}</div>
+      ${r.screenshot? `<img src="${r.screenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}
+      <div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>
+    </div>`).join('') : `<div class="empty">لا توجد طلبات رصيد معلّقة</div>`;
   // سجل كل موظف: عدد الطلبات، إجمالي المبلغ (النهاردة/الشهر/كل الوقت)، والأصناف اللي طلبها
   const byEmployee = {};
   paidOrders.forEach(o=>{
@@ -884,53 +1000,20 @@ function adminScreen(){
         </tr>`;
       }).join('')}
     </table>` : `<div class="empty">لا يوجد سجل طلبات مدفوعة بعد</div>`;
-  const stockableItems = [
-    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false})),
-    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true})),
-    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false})),
-    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true})),
-    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false})),
-  ];
-  const stockHtml = `
-    <table class="balances">
-      <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
-      ${stockableItems.map(it=>{
-        const isOut = state.outOfStock.has(it.id);
-        return `<tr>
-          <td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
-          <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
-          <td>
-            <button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>
-            ${it.custom? `<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}
-          </td>
-        </tr>`;
-      }).join('')}
-    </table>`;
-  const addItemFormHtml = `
-    <div style="margin-top:14px;">
-      <label>القسم</label>
-      <select id="newItemCat" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);">
-        <option value="menu">بوفيه</option>
-        <option value="snack">سناكس</option>
-      </select>
-      <label style="margin-top:8px;">اسم الصنف</label>
-      <input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
-      <label style="margin-top:8px;">السعر</label>
-      <input type="number" id="newItemPrice" placeholder="مثلاً: 20" />
-      <button class="btn-main" style="margin-top:10px;" data-action="addMenuItem">إضافة الصنف</button>
-    </div>`;
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">لوحة التحكم</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
+  ${balanceCardWithActions()}
+  <div class="card"><h2>طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>إجمالي المبيعات</h2>${salesHtml}</div>
   <div class="card"><h2>دفعات كاش محتاجة تأكيد</h2><p class="small" style="margin-top:-6px;">دوس "تأكيد استلام الفلوس" بعد ما توصلك الفلوس فعليًا</p>${unpaidCashHtml}</div>
   <div class="card"><h2>سجل كل موظف</h2><p class="small" style="margin-top:-6px;">إجمالي كل حد وإيه اللي طلبه (الأصناف المدفوعة بس)</p>${employeeLedgerHtml}</div>
   <div class="card"><h2>الطلبات الجديدة</h2>${ordersHtml}</div>
   <div class="card"><h2>سجل كل الطلبات</h2><p class="small" style="margin-top:-6px;">آخر 60 طلب، الأحدث أولًا</p>${historyHtml}</div>
   <div class="card"><h2>الأرصدة</h2>${balancesHtml}</div>
-  <div class="card"><h2>إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockHtml}${addItemFormHtml}</div>`;
+  <div class="card"><h2>إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockManagementHtml()}</div>`;
 }
 function orderRow(o, isPending, isAdminView){
   const itemsStr = o.items.map(i=> i.type ? `${i.name} (${i.type==='baladi'?'بلدي':'فرنساوي'}) ×${i.qty}` : `${i.name} ×${i.qty}`).join('، ');
@@ -981,16 +1064,16 @@ function bindEvents(){
   document.querySelectorAll('[data-action]').forEach(el=>{
     el.onclick = async ()=>{
       const action = el.dataset.action;
-      if(action==='role'){ state.role = el.dataset.role; render(); }
-      else if(action==='backRole'){ state.role = null; state.kitchenUnlocked=false; render(); }
-      else if(action==='doLogin'){ await doLogin(); }
+      if(action==='doLogin'){ await doLogin(); }
       else if(action==='switchUser'){
-        state.name=''; state.role=null; state.cart={}; state.drinkCart={}; state.snackCart={}; state.isAdmin=false;
+        state.name=''; state.role=null; state.cart={}; state.drinkCart={}; state.snackCart={}; state.isAdmin=false; state.topupMode=null;
         clearSession();
         if(state._unsubOrders){ state._unsubOrders(); state._unsubOrders=null; }
         if(state._unsubBalances){ state._unsubBalances(); state._unsubBalances=null; }
         if(state._unsubStock){ state._unsubStock(); state._unsubStock=null; }
         if(state._unsubCustomItems){ state._unsubCustomItems(); state._unsubCustomItems=null; }
+        if(state._unsubPrices){ state._unsubPrices(); state._unsubPrices=null; }
+        if(state._unsubBalanceRequests){ state._unsubBalanceRequests(); state._unsubBalanceRequests=null; }
         render();
       }
       else if(action==='setPayment'){ state.paymentMethod = el.dataset.method; render(); }
@@ -1022,25 +1105,15 @@ function bindEvents(){
       }
       else if(action==='confirmDrinkOrder'){ await submitDrinkOrder(); }
       else if(action==='tab'){ state.tab = el.dataset.tab; render(); if(state.tab==='balance') refreshMyOrders(); }
-      else if(action==='unlockKitchen'){
-        const pinEl = document.getElementById('kitchenPinInput');
-        const pin = pinEl ? pinEl.value : '';
-        if(pin !== KITCHEN_PIN){ toast('الباسورد غلط'); return; }
-        state.kitchenUnlocked = true;
-        render();
-        prepAlerts();
-        state._unsubOrders = listenOrders(onOrdersUpdate);
-        state._unsubBalances = listenBalances(onBalancesUpdate);
-        if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
-        if(!state._unsubCustomItems) state._unsubCustomItems = listenCustomItems((menuItems, snackItems)=>{
-          state.customMenu = menuItems; state.customSnacks = snackItems; render();
-        });
-        if(!state._unsubPrices) state._unsubPrices = listenPriceOverrides(ov=>{ state.priceOverrides = ov; render(); });
-      }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
       else if(action==='savePrice'){ await handleSavePrice(el.dataset.id, el.dataset.mode); }
       else if(action==='confirmPayment'){ await confirmPayment(el.dataset.id); }
       else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
+      else if(action==='openTopup'){ state.tab='balance'; state.topupMode='charge'; render(); }
+      else if(action==='openWithdraw'){ state.tab='balance'; state.topupMode='withdraw'; render(); }
+      else if(action==='closeTopup'){ state.topupMode=null; render(); }
+      else if(action==='submitBalanceRequest'){ await handleSubmitBalanceRequest(); }
+      else if(action==='approveBalanceRequest'){ await approveBalanceRequest(el.dataset.id); }
       else if(action==='incSnack'){
         const id = el.dataset.id;
         if(!state.snackCart[id]) state.snackCart[id] = {qty:1};
@@ -1073,13 +1146,17 @@ async function afterLogin(){
   if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
   render();
   if(state.role==='employee' || state.role==='admin') refreshMyOrders();
-  if(state.role==='admin'){
+  if(state.role==='admin' || state.role==='kitchen'){
     if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
     if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
+    if(!state._unsubBalanceRequests) state._unsubBalanceRequests = listenPendingBalanceRequests(reqs=>{
+      state.balanceRequests = reqs; render();
+    });
   }
+  if(state.role==='kitchen'){ state.kitchenUnlocked = true; prepAlerts(); }
   if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
-  if(!state._unsubCustomItems) state._unsubCustomItems = listenCustomItems((menuItems, snackItems)=>{
-    state.customMenu = menuItems; state.customSnacks = snackItems; render();
+  if(!state._unsubCustomItems) state._unsubCustomItems = listenCustomItems((menuItems, snackItems, drinkItems)=>{
+    state.customMenu = menuItems; state.customSnacks = snackItems; state.customDrinks = drinkItems; render();
   });
   if(!state._unsubPrices) state._unsubPrices = listenPriceOverrides(ov=>{ state.priceOverrides = ov; render(); });
 }
@@ -1089,6 +1166,7 @@ async function doLogin(){
   if(!u || !p){ toast('يرجى إدخال الإيميل وكلمة المرور'); return; }
   if(!/^[^\s@]+@evraid\.com$/i.test(u)){ toast('لازم تسجل بإيميل بصيغة اسم@evraid.com'); return; }
   if(p.length < 4){ toast('كلمة المرور لازم تكون 4 حروف على الأقل'); return; }
+  if(!isAllowedEmail(u)){ toast('هذا الإيميل غير مصرح له بالدخول'); return; }
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
   try{ localStorage.setItem('evraid_last_email', u); }catch(e){}
   try{
@@ -1105,8 +1183,8 @@ async function doLogin(){
       toast('تم إنشاء الحساب بنجاح');
     }
     state.name = u;
-    state.isAdmin = u.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-    if(state.isAdmin){ state.role = 'admin'; }
+    state.role = roleForEmail(u);
+    state.isAdmin = state.role === 'admin';
     saveSession();
     await afterLogin();
   }catch(e){ toast('حدث خطأ أثناء تسجيل الدخول'); }
@@ -1143,20 +1221,53 @@ async function handleSavePrice(id, mode){
     toast('تم حفظ السعر');
   }catch(e){ toast('حدث خطأ أثناء الحفظ'); }
 }
-async function handleAddMenuItem(){  const catEl = document.getElementById('newItemCat');
+async function handleSubmitBalanceRequest(){
+  const kindBtn = document.querySelector('[data-action="submitBalanceRequest"]');
+  const kind = kindBtn ? kindBtn.dataset.kind : state.topupMode;
+  const amountEl = document.getElementById('balanceReqAmount');
+  const phoneEl = document.getElementById('balanceReqPhone');
+  const amount = amountEl ? Number(amountEl.value) : NaN;
+  const phone = phoneEl ? phoneEl.value.trim() : '';
+  if(!amount || amount<=0){ toast('اكتب مبلغ صحيح'); return; }
+  if(!/^[0-9]{11}$/.test(phone)){ toast('الرقم لازم يكون أرقام بس ومكوّن من 11 رقم'); return; }
+  let screenshot = null;
+  if(kind==='charge'){
+    const fileEl = document.getElementById('balanceReqFile');
+    const file = fileEl && fileEl.files ? fileEl.files[0] : null;
+    if(!file){ toast('يرجى إرفاق صورة إثبات التحويل'); return; }
+    try{ screenshot = await fileToCompressedBase64(file); }
+    catch(e){ toast('تعذر قراءة الصورة، حاول تاني'); return; }
+  }
+  const req = {
+    id: 'breq_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    name: state.name, kind, amount, phone, screenshot, status:'pending', ts: Date.now()
+  };
+  try{
+    await saveBalanceRequest(req);
+    state.topupMode = null;
+    toast('تم إرسال الطلب، بانتظار المراجعة');
+    render();
+  }catch(e){ toast('حدث خطأ أثناء إرسال الطلب'); }
+}
+async function handleAddMenuItem(){
+  const catEl = document.getElementById('newItemCat');
   const nameEl = document.getElementById('newItemName');
   const priceEl = document.getElementById('newItemPrice');
   const cat = catEl ? catEl.value : 'menu';
   const name = nameEl ? nameEl.value.trim() : '';
-  const price = priceEl ? Number(priceEl.value) : NaN;
   if(!name){ toast('اكتب اسم الصنف'); return; }
-  if(!price || price<=0){ toast('اكتب سعر صحيح'); return; }
   const item = {
     id: 'custom_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
     name, addedAt: Date.now(),
   };
-  if(cat==='menu'){ item.baladi = price; item.fransawi = null; item.kind='menu'; }
-  else { item.price = price; item.kind='snack'; }
+  if(cat==='drinks'){
+    item.kind='drinks';
+  } else {
+    const price = priceEl ? Number(priceEl.value) : NaN;
+    if(!price || price<=0){ toast('اكتب سعر صحيح'); return; }
+    if(cat==='menu'){ item.baladi = price; item.fransawi = null; item.kind='menu'; }
+    else { item.price = price; item.kind='snack'; }
+  }
   try{
     await addCustomItem(item);
     toast('تم إضافة الصنف');
@@ -1207,7 +1318,7 @@ async function submitDrinkOrder(){
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
   const items = [];
   for(const id in state.drinkCart){
-    const d = DRINKS.find(m=>m.id===id);
+    const d = allDrinksItems().find(m=>m.id===id);
     items.push({name:d.name, qty:state.drinkCart[id].qty, price:0});
   }
   const order = {
@@ -1286,8 +1397,8 @@ function onBalancesUpdate(balances){
   const saved = loadSession();
   if(saved && saved.name && saved.role){
     state.name = saved.name;
-    state.role = saved.role;
-    state.isAdmin = saved.name.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    state.role = roleForEmail(saved.name);
+    state.isAdmin = state.role === 'admin';
     if(firebaseReady){ afterLogin(); } else {
       const check = setInterval(()=>{
         if(firebaseReady){ clearInterval(check); afterLogin(); }

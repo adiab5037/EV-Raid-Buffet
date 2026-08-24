@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>EV Raid Buffet</title>
+<title>EV RAID | Staff Buffet</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0b4271">
@@ -24,6 +24,12 @@
     storageBucket: "ev-raid-buffet-a78c1.firebasestorage.app",
     messagingSenderId: "574467364009",
     appId: "1:574467364009:web:b589f41eb15070340685b8"
+  };
+  // إشعارات خارجية مجانية عبر ntfy
+  window.NTFY_CONFIG = {
+    topic: "evraid_orders_7c42cf1c6b7564ebb1a0af3be7ccd537",
+    server: "https://ntfy.sh",
+    clickUrl: "https://adiab5037.github.io/EV-Raid-Buffet/"
   };
 </script>
 
@@ -510,6 +516,28 @@ function fileToCompressedBase64(file){
     reader.readAsDataURL(file);
   });
 }
+// إرسال إشعار Push خارجي مجاني لضياء عبر تطبيق ntfy
+async function sendOrderPush(order){
+  try{
+    const cfg = window.NTFY_CONFIG;
+    if(!cfg || !cfg.topic || !cfg.server) return;
+    const itemsText = (order.items||[]).map(it=>`${it.qty||1}× ${it.name}${it.type ? ' ('+it.type+')' : ''}`).join('، ');
+    const body = `طلب جديد من ${order.name}\n${itemsText}${order.total ? '\nالإجمالي: '+order.total+' جنيه' : ''}`;
+    await fetch(`${cfg.server}/${cfg.topic}`, {
+      method:'POST',
+      headers:{
+        'Title':'EV Raid Buffet - طلب جديد',
+        'Priority':'4',
+        'Tags':'bell',
+        'Click': cfg.clickUrl || ''
+      },
+      body
+    });
+  }catch(e){
+    console.warn('Push notification failed', e);
+  }
+}
+
 // إرسال إيميل تنبيه للشيف بس (مش لكل الأدمنز) عند وجود طلب جديد
 async function sendChefEmail(order){
   try{
@@ -528,19 +556,22 @@ async function sendChefEmail(order){
   }catch(e){ console.error('email send failed', e); }
 }
 // إدارة الأصناف "أوت أوف ستوك"
+// الصنف العادي يستخدم id نفسه، والاختيارات تستخدم id__baladi / id__fransawi
+function stockKey(id, type){ return type ? `${id}__${type}` : id; }
 function listenOutOfStock(cb){
   if(!firebaseReady) return ()=>{};
   return db.collection('settings').doc('outOfStock').onSnapshot(doc=>{
     cb(doc.exists ? (doc.data().ids||[]) : []);
   });
 }
-async function toggleStock(id){
+async function toggleStock(id, type){
   if(!firebaseReady) return;
+  const key = stockKey(id, type);
   const ref = db.collection('settings').doc('outOfStock');
   await db.runTransaction(async (t)=>{
     const doc = await t.get(ref);
     const ids = doc.exists ? (doc.data().ids||[]) : [];
-    const next = ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id];
+    const next = ids.includes(key) ? ids.filter(x=>x!==key) : [...ids, key];
     t.set(ref, {ids: next}, {merge:true});
   });
 }
@@ -644,7 +675,23 @@ async function saveOrder(order){
 }
 async function markOrderDone(id){
   if(!firebaseReady) return;
-  await db.collection('orders').doc(id).update({status:'done'});
+  const orderRef = db.collection('orders').doc(id);
+  await db.runTransaction(async (t)=>{
+    const orderDoc = await t.get(orderRef);
+    if(!orderDoc.exists) return;
+    const order = orderDoc.data();
+    // يمنع الخصم مرتين لو اتضغط الزر أكتر من مرة
+    if(order.status === 'done') return;
+    if(order.paymentMethod === 'balance' && !order.balanceCharged){
+      const balanceRef = db.collection('balances').doc(order.name);
+      const balanceDoc = await t.get(balanceRef);
+      const current = balanceDoc.exists ? (balanceDoc.data().value || 0) : 0;
+      t.set(balanceRef, {value: current - Number(order.total || 0)}, {merge:true});
+      t.update(orderRef, {status:'done', balanceCharged:true, preparedAt:Date.now()});
+    } else {
+      t.update(orderRef, {status:'done', preparedAt:Date.now()});
+    }
+  });
 }
 async function confirmPayment(id){
   if(!firebaseReady) return;
@@ -720,13 +767,16 @@ function orderScreen(){
   const items = available.map(it=>{
     const c = state.cart[it.id];
     const qty = c? c.qty : 0;
+    const baladiAvailable = it.baladi!=null && !state.outOfStock.has(stockKey(it.id,'baladi'));
+    const fransawiAvailable = it.fransawi!=null && !state.outOfStock.has(stockKey(it.id,'fransawi'));
+    if(!baladiAvailable && !fransawiAvailable) return '';
     return `
     <div class="menu-item">
       <div style="flex:1;">
         <div class="name">${it.name}</div>
         <div class="price-row">
-          ${it.baladi!=null? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
-          ${it.fransawi!=null? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
+          ${baladiAvailable? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
+          ${fransawiAvailable? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
         </div>
       </div>
       ${qty>0? `
@@ -943,42 +993,35 @@ function kitchenScreen(){
 }
 function stockManagementHtml(){
   const stockableItems = [
-    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false})),
-    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true})),
-    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false})),
-    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true})),
-    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false})),
-    ...state.customDrinks.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:true})),
+    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false, menu:true})),
+    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true, menu:true})),
+    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false, menu:false})),
+    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true, menu:false})),
+    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false, menu:false})),
+    ...state.customDrinks.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:true, menu:false})),
   ];
-  const stockHtml = `
-    <table class="balances">
-      <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
-      ${stockableItems.map(it=>{
-        const isOut = state.outOfStock.has(it.id);
-        return `<tr>
-          <td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
-          <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
-          <td>
-            <button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>
-            ${it.custom? `<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}
-          </td>
-        </tr>`;
-      }).join('')}
-    </table>`;
+  const stockHtml = `<table class="balances">
+    <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
+    ${stockableItems.map(it=>{
+      const isOut = state.outOfStock.has(it.id);
+      if(it.menu){
+        const item = allMenuItems().find(x=>x.id===it.id) || it;
+        const baladiOut = state.outOfStock.has(stockKey(it.id,'baladi'));
+        const fransawiOut = state.outOfStock.has(stockKey(it.id,'fransawi'));
+        return `<tr><td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
+          <td>${item.baladi!=null?`<div class="small" style="color:${baladiOut?'#c53030':'var(--green-dark)'};font-weight:800;">بلدي: ${baladiOut?'متوقف':'متاح'}</div>`:''}${item.fransawi!=null?`<div class="small" style="color:${fransawiOut?'#c53030':'var(--green-dark)'};font-weight:800;">فرنساوي: ${fransawiOut?'متوقف':'متاح'}</div>`:''}</td>
+          <td>${item.baladi!=null?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;margin:2px;" data-action="toggleStock" data-id="${it.id}" data-type="baladi">${baladiOut?'تشغيل البلدي':'إيقاف البلدي'}</button>`:''}${item.fransawi!=null?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;margin:2px;" data-action="toggleStock" data-id="${it.id}" data-type="fransawi">${fransawiOut?'تشغيل الفرنساوي':'إيقاف الفرنساوي'}</button>`:''}${it.custom?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;margin:2px;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}</td></tr>`;
+      }
+      return `<tr><td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td><td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td><td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>${it.custom?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}</td></tr>`;
+    }).join('')}</table>`;
   const addItemFormHtml = `
     <div style="margin-top:14px;">
       <label>القسم</label>
       <select id="newItemCat" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" onchange="document.getElementById('newItemPriceWrap').style.display = this.value==='drinks' ? 'none' : 'block'">
-        <option value="menu">بوفيه</option>
-        <option value="snack">سناكس</option>
-        <option value="drinks">مشروبات</option>
+        <option value="menu">بوفيه</option><option value="snack">سناكس</option><option value="drinks">مشروبات</option>
       </select>
-      <label style="margin-top:8px;">اسم الصنف</label>
-      <input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
-      <div id="newItemPriceWrap">
-        <label style="margin-top:8px;">السعر</label>
-        <input type="number" id="newItemPrice" placeholder="مثلاً: 20" />
-      </div>
+      <label style="margin-top:8px;">اسم الصنف</label><input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
+      <div id="newItemPriceWrap"><label style="margin-top:8px;">السعر</label><input type="number" id="newItemPrice" placeholder="مثلاً: 20" /></div>
       <button class="btn-main" style="margin-top:10px;" data-action="addMenuItem">إضافة الصنف</button>
     </div>`;
   return `${stockHtml}${addItemFormHtml}`;
@@ -1188,7 +1231,7 @@ function bindEvents(){
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
       else if(action==='savePrice'){ await handleSavePrice(el.dataset.id, el.dataset.mode); }
       else if(action==='confirmPayment'){ await confirmPayment(el.dataset.id); }
-      else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
+      else if(action==='toggleStock'){ await toggleStock(el.dataset.id, el.dataset.type || null); }
       else if(action==='openTopup'){ state.tab='balance'; state.topupMode='charge'; render(); }
       else if(action==='openWithdraw'){ state.tab='balance'; state.topupMode='withdraw'; render(); }
       else if(action==='closeTopup'){ state.topupMode=null; render(); }
@@ -1378,18 +1421,16 @@ async function submitOrder(){
   const note = noteEl ? noteEl.value.trim() : '';
   const order = {
     id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', ts: Date.now(), status: 'pending', note, ...ip.extra
+    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', balanceCharged:false, ts: Date.now(), status: 'pending', note, ...ip.extra
   };
   try{
     await saveOrder(order);
-    if(method === 'balance'){
-      await addToBalance(state.name, -total);
-      state.balance = state.balance - total;
-    }
+    // الرصيد لا يُخصم الآن؛ الخصم يتم مرة واحدة فقط عند ضغط الشيف "تم التجهيز".
     state.cart = {};
     state.snackCart = {};
-    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
+    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب — سيتم خصم الرصيد بعد تجهيز الطلب');
     render();
+    sendOrderPush(order);
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
 }
@@ -1410,6 +1451,7 @@ async function submitDrinkOrder(){
     state.drinkCart = {};
     toast('تم إرسال طلب المشروبات إلى المطبخ');
     render();
+    sendOrderPush(order);
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
 }

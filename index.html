@@ -314,6 +314,9 @@
     border-right:4px solid var(--navy);
   }
   .order-row.new{border-right-color:var(--green); animation:pulse 1.4s infinite;}
+  .items-list{margin-top:4px;}
+  .item-line{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;gap:8px;}
+  .item-swap{padding:3px 9px;font-size:10.5px;flex-shrink:0;}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(92,178,70,0.4);}70%{box-shadow:0 0 0 8px rgba(92,178,70,0);}100%{box-shadow:0 0 0 0 rgba(92,178,70,0);}}
   .order-row .top{display:flex;justify-content:space-between;font-weight:800;margin-bottom:4px;}
   .order-row .items{opacity:0.75;}
@@ -485,6 +488,13 @@ function roleForEmail(email){
 }
 // رقم الإنستاباي اللي هيظهر للموظف عشان يحول عليه (رقم الشيف)
 const INSTAPAY_NUMBER = "01129135901";
+// ============================================================
+// إشعارات حقيقية لضياء (ntfy.sh) — الطريقة الوحيدة اللي بتوصل حتى لو التطبيق مقفول تمامًا،
+// بعكس Notification API العادي اللي محتاج شاشة المطبخ تكون فاتحة فعليًا في المتصفح عشان يشتغل.
+// خطوة تفعيلها: الشيف يحمّل تطبيق ntfy (مجاني) ويشترك مرة واحدة في القناة دي بالظبط: evraid-kitchen-x7q2m9
+// ============================================================
+const NTFY_TOPIC = "evraid-kitchen-x7q2m9";
+const APP_URL = "https://adiab5037.github.io/EV-Raid-Buffet/";
 // تاب المشروبات مقصور على إيميلات الأدمن بس (ADMIN_EMAILS فوق)، محدش تاني يشوفه حتى لو شيف أو موظف
 function canSeeDrinks(){
   return state.role === 'admin';
@@ -566,6 +576,17 @@ async function sendChefEmail(order){
       order_time: new Date(order.ts).toLocaleString('ar-EG')
     });
   }catch(e){ console.error('email send failed', e); }
+}
+// إشعار حقيقي يوصل لموبايل الشيف حتى لو التطبيق مقفول تمامًا (عكس Notification API اللي محتاج التطبيق يكون فاتح)
+async function sendKitchenPush(title, message){
+  if(!NTFY_TOPIC) return;
+  try{
+    await fetch('https://ntfy.sh/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ topic: NTFY_TOPIC, title, message, priority: 5, click: APP_URL })
+    });
+  }catch(e){ console.error('ntfy push failed', e); }
 }
 // إدارة الأصناف "أوت أوف ستوك"
 function listenOutOfStock(cb){
@@ -678,6 +699,14 @@ async function approveBalanceRequest(id){
   await ref.update({status:'approved'});
   await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount);
 }
+// رفض طلب شحن/سحب رصيد — مافيش أي تعديل على الرصيد لأنه أصلاً بيتغيّر بس عند القبول
+async function rejectBalanceRequest(id){
+  if(!firebaseReady) return;
+  const ref = db.collection('balanceRequests').doc(id);
+  const doc = await ref.get();
+  if(!doc.exists || doc.data().status !== 'pending') return;
+  await ref.update({status:'rejected'});
+}
 async function saveOrder(order){
   if(!firebaseReady) return;
   await db.collection('orders').doc(order.id).set(order);
@@ -685,6 +714,52 @@ async function saveOrder(order){
 async function markOrderDone(id){
   if(!firebaseReady) return;
   await db.collection('orders').doc(id).update({status:'done'});
+}
+// إلغاء الطلب بالكامل — لو كان مدفوعًا من الرصيد بيرجّع المبلغ تلقائيًا
+async function cancelOrder(id){
+  if(!firebaseReady) return;
+  const ref = db.collection('orders').doc(id);
+  await db.runTransaction(async (t)=>{
+    const doc = await t.get(ref);
+    if(!doc.exists) return;
+    const order = doc.data();
+    if(order.status !== 'pending') return; // منعًا لإلغاء طلب سبق تجهيزه أو إلغاؤه
+    if(order.paymentMethod==='balance' && order.total>0){
+      const balRef = db.collection('balances').doc(order.name);
+      const balDoc = await t.get(balRef);
+      const cur = balDoc.exists ? (balDoc.data().value||0) : 0;
+      t.set(balRef, {value: cur + order.total}, {merge:true});
+    }
+    t.update(ref, {status:'cancelled'});
+  });
+}
+// تبديل نوع الرغيف (بلدي/فرنساوي) لصنف داخل الطلب، مع تعديل السعر والإجمالي وفرق الرصيد تلقائيًا
+async function swapItemType(orderId, itemIndex){
+  if(!firebaseReady) return;
+  const ref = db.collection('orders').doc(orderId);
+  await db.runTransaction(async (t)=>{
+    const doc = await t.get(ref);
+    if(!doc.exists) return;
+    const order = doc.data();
+    if(order.status !== 'pending') return;
+    const items = [...(order.items||[])];
+    const it = items[itemIndex];
+    if(!it || !it.type) return;
+    const newType = it.type==='baladi' ? 'fransawi' : 'baladi';
+    const mi = allMenuItems().find(m=>m.name===it.name);
+    const newPrice = mi ? mi[newType] : null;
+    if(newPrice==null) return;
+    const diff = (newPrice - it.price) * it.qty;
+    items[itemIndex] = {...it, type:newType, price:newPrice};
+    const total = order.total + diff;
+    if(order.paymentMethod==='balance' && diff!==0){
+      const balRef = db.collection('balances').doc(order.name);
+      const balDoc = await t.get(balRef);
+      const cur = balDoc.exists ? (balDoc.data().value||0) : 0;
+      t.set(balRef, {value: cur - diff}, {merge:true});
+    }
+    t.update(ref, {items, total});
+  });
 }
 async function confirmPayment(id){
   if(!firebaseReady) return;
@@ -1024,7 +1099,10 @@ function kitchenScreen(){
       <div class="top"><span>${r.name}</span><span>${r.kind==='charge'?'شحن':'سحب'} ${fmt(r.amount)}</span></div>
       <div class="small">${r.kind==='charge'?'حوّل من':'يستلم على'}: ${r.phone}</div>
       ${r.screenshot? `<img src="${r.screenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}
-      <div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>
+      <div class="actions">
+        <button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button>
+        <button class="btn-ghost" style="border-color:#b3413a;color:#b3413a;" data-action="rejectBalanceRequest" data-id="${r.id}">رفض الطلب ✕</button>
+      </div>
     </div>`).join('') : `<div class="empty">لا توجد طلبات رصيد معلّقة</div>`;
   // تعديل أسعار كل الأصناف — الشيف بس هو اللي بيشوف القسم ده
   const priceRows = [
@@ -1154,7 +1232,10 @@ function adminScreen(){
       <div class="top"><span>${r.name}</span><span>${r.kind==='charge'?'شحن':'سحب'} ${fmt(r.amount)}</span></div>
       <div class="small">${r.kind==='charge'?'حوّل من':'يستلم على'}: ${r.phone}</div>
       ${r.screenshot? `<img src="${r.screenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}
-      <div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>
+      <div class="actions">
+        <button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button>
+        <button class="btn-ghost" style="border-color:#b3413a;color:#b3413a;" data-action="rejectBalanceRequest" data-id="${r.id}">رفض الطلب ✕</button>
+      </div>
     </div>`).join('') : `<div class="empty">لا توجد طلبات رصيد معلّقة</div>`;
   // سجل كل موظف: عدد الطلبات، إجمالي المبلغ (النهاردة/الشهر/كل الوقت)، والأصناف اللي طلبها
   const byEmployee = {};
@@ -1201,9 +1282,23 @@ function adminScreen(){
   <div class="card"><h2>📦 إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockManagementHtml()}</div>`;
 }
 function orderRow(o, isPending, isAdminView){
-  const itemsStr = o.items.map(i=> i.type ? `${i.name} (${i.type==='baladi'?'بلدي':'فرنساوي'}) ×${i.qty}` : `${i.name} ×${i.qty}`).join('، ');
-  const time = new Date(o.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
   const isDrinks = o.kind === 'drinks';
+  const isCancelled = o.status === 'cancelled';
+  const canManage = isPending && !isCancelled;
+  const itemLabel = i => i.type ? `${i.name} (${i.type==='baladi'?'بلدي':'فرنساوي'}) ×${i.qty}` : `${i.name} ×${i.qty}`;
+  const itemsHtml = canManage
+    ? `<div class="items-list">${o.items.map((i,idx)=>{
+        if(!i.type) return `<div class="item-line"><span>${itemLabel(i)}</span></div>`;
+        const mi = allMenuItems().find(m=>m.name===i.name);
+        const altType = i.type==='baladi' ? 'fransawi' : 'baladi';
+        const canSwap = mi && mi[altType] != null;
+        return `<div class="item-line">
+          <span>${itemLabel(i)}</span>
+          ${canSwap? `<button class="btn-ghost item-swap" data-action="swapItemType" data-order-id="${o.id}" data-item-index="${idx}">تبديل النوع</button>`:''}
+        </div>`;
+      }).join('')}</div>`
+    : `<div class="items">${o.items.map(itemLabel).join('، ')}</div>`;
+  const time = new Date(o.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
   const payLabel = o.paymentMethod==='cash'? '💵 كاش' : o.paymentMethod==='instapay' ? '📲 إنستاباي' : '💳 رصيد';
   const payBadge = !isDrinks ? payLabel : '';
   const instapayInfo = (!isDrinks && o.paymentMethod==='instapay') ? `
@@ -1211,19 +1306,20 @@ function orderRow(o, isPending, isAdminView){
     ${o.instapayScreenshot? `<img src="${o.instapayScreenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}` : '';
   const needsPaymentConfirm = isAdminView && !isDrinks && o.paymentMethod==='cash' && !o.paymentConfirmed;
   const paymentBadge = (!isDrinks && o.paymentMethod==='cash') ? `
-    <div class="small" style="margin-top:4px;color:${o.paymentConfirmed?'var(--green-dark)':'#c53030'};font-weight:700;">${o.paymentConfirmed? '✓ الفلوس استلمت':'⏳ لسه مستلمتش الفلوس'}</div>` : '';
+    <div class="small" style="margin-top:4px;color:${o.paymentConfirmed?'var(--green-dark)':'#c53030'};font-weight:700;">${o.paymentConfirmed? '✓ تم استلام المبلغ':'⏳ لم يتم استلام المبلغ بعد'}</div>` : '';
   const noteHtml = o.note ? `<div class="small" style="margin-top:6px;background:var(--card-2);border-radius:8px;padding:6px 10px;">📝 ${o.note}</div>` : '';
   return `
   <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}">
-    <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
-    <div class="items">${itemsStr}</div>
+    <div class="top"><span>${o.name} ${isDrinks? '☕':''}${isCancelled? ' — ❌ ملغي':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
+    ${itemsHtml}
     <div class="small">${time}${payBadge? ' · '+payBadge : ''}</div>
     ${paymentBadge}
     ${noteHtml}
     ${instapayInfo}
     <div class="actions">
-      ${isPending? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
-      ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
+      ${canManage? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
+      ${canManage? `<button class="btn-ghost" style="border-color:#b3413a;color:#b3413a;" data-action="cancelOrder" data-id="${o.id}">إلغاء الطلب</button>`:''}
+      ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام المبلغ 💵</button>`:''}
     </div>
   </div>`;
 }
@@ -1315,6 +1411,10 @@ function bindEvents(){
       }
       else if(action==='sendChat'){ await handleSendChat(el.dataset.employee); }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
+      else if(action==='cancelOrder'){
+        if(confirm('هل أنت متأكد من إلغاء هذا الطلب بالكامل؟')) await cancelOrder(el.dataset.id);
+      }
+      else if(action==='swapItemType'){ await swapItemType(el.dataset.orderId, Number(el.dataset.itemIndex)); }
       else if(action==='savePrice'){ await handleSavePrice(el.dataset.id, el.dataset.mode); }
       else if(action==='confirmPayment'){ await confirmPayment(el.dataset.id); }
       else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
@@ -1323,6 +1423,9 @@ function bindEvents(){
       else if(action==='closeTopup'){ state.topupMode=null; render(); }
       else if(action==='submitBalanceRequest'){ await handleSubmitBalanceRequest(); }
       else if(action==='approveBalanceRequest'){ await approveBalanceRequest(el.dataset.id); }
+      else if(action==='rejectBalanceRequest'){
+        if(confirm('هل أنت متأكد من رفض هذا الطلب؟')) await rejectBalanceRequest(el.dataset.id);
+      }
       else if(action==='incSnack'){
         const id = el.dataset.id;
         if(!state.snackCart[id]) state.snackCart[id] = {qty:1};
@@ -1470,6 +1573,7 @@ async function handleSubmitBalanceRequest(){
     state.topupMode = null;
     toast('تم إرسال الطلب، بانتظار المراجعة');
     render();
+    sendKitchenPush(kind==='charge' ? 'طلب شحن رصيد 💳' : 'طلب سحب رصيد 🏦', `${state.name} — ${fmt(amount)}`);
   }catch(e){ toast('حدث خطأ أثناء إرسال الطلب'); }
 }
 async function handleAddMenuItem(){
@@ -1534,6 +1638,8 @@ async function submitOrder(){
     toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
     render();
     sendChefEmail(order);
+    const itemsStr = order.items.map(i=>`${i.name} ×${i.qty}`).join('، ');
+    sendKitchenPush('طلب جديد 🍽️', `${state.name}: ${itemsStr} — ${fmt(total)}`);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
 }
 async function submitDrinkOrder(){
@@ -1556,6 +1662,8 @@ async function submitDrinkOrder(){
     toast('تم إرسال طلب المشروبات إلى المطبخ');
     render();
     sendChefEmail(order);
+    const itemsStr = order.items.map(i=>`${i.name} ×${i.qty}`).join('، ');
+    sendKitchenPush('طلب مشروبات ☕', `${state.name}: ${itemsStr}`);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
 }
 async function handleSendChat(employeeDataset){
@@ -1570,6 +1678,7 @@ async function handleSendChat(employeeDataset){
   try{
     if(inputEl) inputEl.value = '';
     await sendChatMsg(employee, sender, text);
+    if(sender==='employee') sendKitchenPush('رسالة جديدة من '+employee, text);
   }catch(e){ toast('حدث خطأ أثناء إرسال الرسالة'); }
 }
 function scrollChatToBottom(){

@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>EV RAID | Staff Buffet</title>
+<title>EV Raid Buffet</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0b4271">
@@ -24,12 +24,6 @@
     storageBucket: "ev-raid-buffet-a78c1.firebasestorage.app",
     messagingSenderId: "574467364009",
     appId: "1:574467364009:web:b589f41eb15070340685b8"
-  };
-  // إشعارات خارجية مجانية عبر ntfy
-  window.NTFY_CONFIG = {
-    topic: "evraid_orders_7c42cf1c6b7564ebb1a0af3be7ccd537",
-    server: "https://ntfy.sh",
-    clickUrl: "https://adiab5037.github.io/EV-Raid-Buffet/"
   };
 </script>
 
@@ -57,33 +51,30 @@
 
 <style>
   :root{
-    --bg-1:#eef3f0;
-    --bg-2:#f4f6f8;
+    --bg-1:#eef1f5;
+    --bg-2:#f6f7f9;
     --card:#ffffff;
-    --card-2:#f4f6f8;
-    --ink:#0b2338;
-    --navy:#0b4271;
-    --navy-deep:#062c4d;
-    --green:#79ba48;
-    --green-dark:#5c9636;
-    --gold:#b8923f;
-    --muted:#5f7185;
-    --line:rgba(11,66,113,0.12);
+    --card-2:#f7f8fa;
+    --ink:#111f2e;
+    --navy:#0e3f66;
+    --navy-deep:#082944;
+    --green:#4f8f5b;
+    --green-dark:#3d7247;
+    --gold:#a5813a;
+    --muted:#64748b;
+    --line:rgba(15,42,66,0.10);
     --danger:#b3413a;
   }
   *{box-sizing:border-box;}
   body{
     margin:0;
     font-family:'Tajawal',sans-serif;
-    background:
-      radial-gradient(circle at 1px 1px, rgba(20,51,92,0.06) 1px, transparent 0),
-      radial-gradient(ellipse at top, rgba(184,146,63,0.05) 0%, transparent 55%),
-      linear-gradient(160deg, var(--bg-1), var(--bg-2) 70%);
-    background-size: 18px 18px, auto, auto;
+    background: linear-gradient(175deg, var(--bg-1), var(--bg-2) 65%);
     color:var(--ink);
     min-height:100vh;
     display:flex;
     justify-content:center;
+    letter-spacing:0.1px;
   }
   #app{
     width:100%;
@@ -97,18 +88,18 @@
     top:18px; right:16px;
     display:flex; align-items:center; gap:6px;
     background:#ffffff;
-    border:1.5px solid var(--line);
-    box-shadow:0 4px 14px rgba(20,51,92,0.12);
+    border:1px solid var(--line);
+    box-shadow:0 2px 10px rgba(15,42,66,0.08);
     border-radius:30px;
     padding:7px 12px;
-    font-weight:800;
+    font-weight:700;
     font-size:13px;
     cursor:pointer;
     z-index:20;
   }
-  .balance-badge.owe{color:#c53030;border-color:#c53030;animation:badgePulse 1.8s infinite;}
+  .balance-badge.owe{color:#b3413a;border-color:rgba(179,65,58,0.35);animation:badgePulse 2.2s infinite;}
   .balance-badge.ok{color:var(--green-dark);}
-  @keyframes badgePulse{0%{box-shadow:0 4px 14px rgba(197,48,48,0.15);}50%{box-shadow:0 4px 18px rgba(197,48,48,0.4);}100%{box-shadow:0 4px 14px rgba(197,48,48,0.15);}}
+  @keyframes badgePulse{0%{box-shadow:0 2px 10px rgba(179,65,58,0.10);}50%{box-shadow:0 2px 14px rgba(179,65,58,0.28);}100%{box-shadow:0 2px 10px rgba(179,65,58,0.10);}}
   .brand{
     text-align:center;
     padding:26px 0 16px;
@@ -178,10 +169,11 @@
     position:relative;
     background:var(--card);
     color:var(--ink);
-    border-radius:14px;
+    border-radius:18px;
     padding:20px 18px 18px;
-    box-shadow:0 6px 20px rgba(15,42,74,0.07);
+    box-shadow:0 2px 12px rgba(15,42,66,0.06);
     border:1px solid var(--line);
+    border-right:4px solid var(--gold);
     margin-bottom:14px;
     overflow:hidden;
   }
@@ -221,17 +213,17 @@
   .btn-main{
     width:100%;
     padding:13px;
-    border-radius:10px;
+    border-radius:14px;
     background:linear-gradient(135deg, var(--navy), var(--navy-deep));
     color:#fff;
     font-weight:700;
     font-size:14.5px;
     margin-top:10px;
     letter-spacing:0.3px;
-    box-shadow:0 4px 14px rgba(15,42,74,0.3);
+    box-shadow:0 3px 10px rgba(14,63,102,0.22);
     transition:transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .btn-main:active{transform:translateY(1px); box-shadow:0 2px 8px rgba(15,42,74,0.25);}
+  .btn-main:active{transform:translateY(1px); box-shadow:0 2px 6px rgba(14,63,102,0.18);}
   .btn-main:disabled{opacity:0.5;cursor:not-allowed;}
   .btn-ghost{
     padding:9px 14px;
@@ -254,22 +246,26 @@
     display:flex;
     background:#ffffff;
     border-top:1px solid var(--line);
+    border-radius:20px 20px 0 0;
     box-shadow:0 -4px 16px rgba(15,42,74,0.08);
   }
   .tab{
     flex:1;
     text-align:center;
-    padding:12px 4px 10px;
+    padding:10px 4px 8px;
+    margin:6px 3px;
     background:none;
+    border-radius:12px;
     color:var(--muted);
-    opacity:0.7;
+    opacity:0.75;
     font-size:11.5px;
     font-weight:700;
     display:flex;flex-direction:column;align-items:center;gap:3px;
+    transition:background 0.15s ease, opacity 0.15s ease;
   }
-  .tab.active{opacity:1;color:var(--navy);}
+  .tab.active{opacity:1;color:var(--navy);background:rgba(14,63,102,0.08);}
   .tab.active .ic{color:var(--gold);}
-  .tab .ic{font-size:18px;}
+  .tab .ic{font-size:19px;}
   .menu-item{
     display:flex;
     justify-content:space-between;
@@ -281,8 +277,8 @@
   .menu-item .name{font-weight:700;font-size:15px;}
   .price-row{display:flex;gap:6px;margin-top:6px;}
   .price-btn{
-    padding:6px 10px;
-    border-radius:8px;
+    padding:6px 12px;
+    border-radius:20px;
     background:rgba(20,51,92,0.05);
     border:1px solid rgba(20,51,92,0.2);
     color:var(--navy);
@@ -324,6 +320,41 @@
   .order-row .actions{margin-top:8px;display:flex;gap:8px;}
   .small{font-size:12px;opacity:0.65;}
   .empty{text-align:center;padding:30px 10px;opacity:0.55;font-size:14px;}
+  .chat-box{
+    display:flex;flex-direction:column;gap:8px;
+    max-height:340px;overflow-y:auto;
+    padding:10px 4px;margin-bottom:10px;
+  }
+  .chat-bubble{
+    max-width:78%;
+    padding:8px 12px;
+    border-radius:14px;
+    font-size:13.5px;
+    line-height:1.5;
+    word-wrap:break-word;
+  }
+  .chat-bubble.mine{
+    align-self:flex-start;
+    background:linear-gradient(135deg, var(--navy), var(--navy-deep));
+    color:#fff;
+    border-bottom-right-radius:4px;
+  }
+  .chat-bubble.theirs{
+    align-self:flex-end;
+    background:var(--card-2);
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-bottom-left-radius:4px;
+  }
+  .chat-bubble .chat-time{font-size:10px;opacity:0.6;margin-top:3px;}
+  .chat-input-row{display:flex;gap:8px;align-items:center;}
+  .chat-input-row input{flex:1;}
+  .tab{position:relative;}
+  .chat-dot{
+    position:absolute; top:8px; right:calc(50% - 16px);
+    width:8px;height:8px;border-radius:50%;
+    background:var(--danger); box-shadow:0 0 0 2px #fff;
+  }
   .toast{
     position:fixed;top:14px;left:50%;transform:translateX(-50%);
     background:var(--green-dark);color:#fff;padding:10px 18px;border-radius:30px;
@@ -434,8 +465,7 @@ const DRINKS = [
   {id:'espresso_double', name:'إسبريسو دوبل'},
   {id:'cappuccino', name:'كابتشينو'},
   {id:'latte', name:'لاتيه'},
-  {id:'lemon', name:'ليمون'},
-  {id:'mint', name:'نعناع'},
+  {id:'lemon_mint', name:'ليمون بالنعناع'},
   {id:'water', name:'مياه'},
   {id:'tea', name:'شاي'},
   {id:'karkade', name:'كركديه'},
@@ -474,6 +504,7 @@ let state = {
   outOfStock: new Set(),
   customMenu: [], customSnacks: [], customDrinks: [], priceOverrides: {},
   topupMode: null, balanceRequests: [],
+  chatMessages: [], chatUnread: false, hasChatPolledOnce: false,
   seenOrderIds: new Set(),
   kitchenUnlocked: false,
   hasPolledOnce: false,
@@ -488,6 +519,9 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 function fmt(n){ return (n<0? '-' : '') + Math.abs(n) + ' ج.م'; }
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 async function hashPass(str){
   const enc = new TextEncoder().encode(str);
   const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -516,28 +550,6 @@ function fileToCompressedBase64(file){
     reader.readAsDataURL(file);
   });
 }
-// إرسال إشعار Push خارجي مجاني لضياء عبر تطبيق ntfy
-async function sendOrderPush(order){
-  try{
-    const cfg = window.NTFY_CONFIG;
-    if(!cfg || !cfg.topic || !cfg.server) return;
-    const itemsText = (order.items||[]).map(it=>`${it.qty||1}× ${it.name}${it.type ? ' ('+it.type+')' : ''}`).join('، ');
-    const body = `طلب جديد من ${order.name}\n${itemsText}${order.total ? '\nالإجمالي: '+order.total+' جنيه' : ''}`;
-    await fetch(`${cfg.server}/${cfg.topic}`, {
-      method:'POST',
-      headers:{
-        'Title':'EV Raid Buffet - طلب جديد',
-        'Priority':'4',
-        'Tags':'bell',
-        'Click': cfg.clickUrl || ''
-      },
-      body
-    });
-  }catch(e){
-    console.warn('Push notification failed', e);
-  }
-}
-
 // إرسال إيميل تنبيه للشيف بس (مش لكل الأدمنز) عند وجود طلب جديد
 async function sendChefEmail(order){
   try{
@@ -556,22 +568,19 @@ async function sendChefEmail(order){
   }catch(e){ console.error('email send failed', e); }
 }
 // إدارة الأصناف "أوت أوف ستوك"
-// الصنف العادي يستخدم id نفسه، والاختيارات تستخدم id__baladi / id__fransawi
-function stockKey(id, type){ return type ? `${id}__${type}` : id; }
 function listenOutOfStock(cb){
   if(!firebaseReady) return ()=>{};
   return db.collection('settings').doc('outOfStock').onSnapshot(doc=>{
     cb(doc.exists ? (doc.data().ids||[]) : []);
   });
 }
-async function toggleStock(id, type){
+async function toggleStock(id){
   if(!firebaseReady) return;
-  const key = stockKey(id, type);
   const ref = db.collection('settings').doc('outOfStock');
   await db.runTransaction(async (t)=>{
     const doc = await t.get(ref);
     const ids = doc.exists ? (doc.data().ids||[]) : [];
-    const next = ids.includes(key) ? ids.filter(x=>x!==key) : [...ids, key];
+    const next = ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id];
     t.set(ref, {ids: next}, {merge:true});
   });
 }
@@ -675,23 +684,7 @@ async function saveOrder(order){
 }
 async function markOrderDone(id){
   if(!firebaseReady) return;
-  const orderRef = db.collection('orders').doc(id);
-  await db.runTransaction(async (t)=>{
-    const orderDoc = await t.get(orderRef);
-    if(!orderDoc.exists) return;
-    const order = orderDoc.data();
-    // يمنع الخصم مرتين لو اتضغط الزر أكتر من مرة
-    if(order.status === 'done') return;
-    if(order.paymentMethod === 'balance' && !order.balanceCharged){
-      const balanceRef = db.collection('balances').doc(order.name);
-      const balanceDoc = await t.get(balanceRef);
-      const current = balanceDoc.exists ? (balanceDoc.data().value || 0) : 0;
-      t.set(balanceRef, {value: current - Number(order.total || 0)}, {merge:true});
-      t.update(orderRef, {status:'done', balanceCharged:true, preparedAt:Date.now()});
-    } else {
-      t.update(orderRef, {status:'done', preparedAt:Date.now()});
-    }
-  });
+  await db.collection('orders').doc(id).update({status:'done'});
 }
 async function confirmPayment(id){
   if(!firebaseReady) return;
@@ -702,6 +695,27 @@ function listenOrders(cb){
   if(!firebaseReady) return ()=>{};
   return db.collection('orders').orderBy('ts','desc').onSnapshot(snap=>{
     cb(snap.docs.map(d=>d.data()));
+  });
+}
+// شات المراسلة مع ضياء (الشيف) — كل موظف له خيط رسائل واحد معاه، وضياء بيشوف كل الخيوط
+async function sendChatMsg(employee, sender, text){
+  if(!firebaseReady) return;
+  const msg = {
+    id: 'msg_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    employee, sender, text, ts: Date.now()
+  };
+  await db.collection('chatMessages').doc(msg.id).set(msg);
+}
+function listenMyChat(employee, cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('chatMessages').where('employee','==',employee).onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()).sort((a,b)=>a.ts-b.ts));
+  });
+}
+function listenAllChat(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('chatMessages').onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()).sort((a,b)=>a.ts-b.ts));
   });
 }
 function listenBalances(cb){
@@ -721,6 +735,7 @@ function render(){
     if(state.tab === 'order') c.innerHTML = orderScreen();
     else if(state.tab === 'drinks') c.innerHTML = canSeeDrinks() ? drinksScreen() : orderScreen();
     else if(state.tab === 'balance') c.innerHTML = balanceScreen();
+    else if(state.tab === 'chat') c.innerHTML = chatScreen();
     else c.innerHTML = orderScreen();
   }
   else { c.innerHTML = kitchenScreen(); }
@@ -767,16 +782,13 @@ function orderScreen(){
   const items = available.map(it=>{
     const c = state.cart[it.id];
     const qty = c? c.qty : 0;
-    const baladiAvailable = it.baladi!=null && !state.outOfStock.has(stockKey(it.id,'baladi'));
-    const fransawiAvailable = it.fransawi!=null && !state.outOfStock.has(stockKey(it.id,'fransawi'));
-    if(!baladiAvailable && !fransawiAvailable) return '';
     return `
     <div class="menu-item">
       <div style="flex:1;">
         <div class="name">${it.name}</div>
         <div class="price-row">
-          ${baladiAvailable? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
-          ${fransawiAvailable? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
+          ${it.baladi!=null? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
+          ${it.fransawi!=null? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
         </div>
       </div>
       ${qty>0? `
@@ -873,10 +885,71 @@ function drinksScreen(){
     ${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}
   </div>
   ${drinkCount>0? `
+  <div class="card">
+    <h2>📝 ملاحظة (اختياري)</h2>
+    <textarea id="drinkOrderNote" placeholder="مثلاً: سكر زيادة، من غير سكر..." style="width:100%;min-height:60px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--line);background:var(--card-2);font-family:'Tajawal';font-size:14px;color:var(--ink);outline:none;resize:vertical;"></textarea>
+  </div>
   <div class="cart-bar">
     <span>عدد الأصناف: ${drinkCount}</span>
     <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmDrinkOrder">تأكيد الطلب</button>
   </div>`:''}`;
+}
+function chatScreen(){
+  const msgs = state.chatMessages || [];
+  const bubbles = msgs.map(m=>{
+    const mine = m.sender === 'employee';
+    const time = new Date(m.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="chat-bubble ${mine?'mine':'theirs'}">
+      <div>${escapeHtml(m.text)}</div>
+      <div class="chat-time">${time}</div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
+    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
+  </div>
+  <div class="card">
+    <h2>💬 شات مع ضياء</h2>
+    <p class="small" style="margin-top:-6px;">ابعت أي رسالة أو طلب لضياء مباشرة</p>
+    <div class="chat-box" id="chatBox">${bubbles || `<div class="empty">مفيش رسائل لسه، ابعت أول رسالة!</div>`}</div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="اكتب رسالتك هنا..." />
+      <button class="btn-main" style="width:auto;margin:0;padding:11px 18px;" data-action="sendChat">إرسال</button>
+    </div>
+  </div>`;
+}
+function chatThreadsHtml(){
+  const byEmp = {};
+  (state.chatMessages||[]).forEach(m=>{
+    if(!byEmp[m.employee]) byEmp[m.employee] = [];
+    byEmp[m.employee].push(m);
+  });
+  const employees = Object.keys(byEmp).sort((a,b)=> byEmp[b][byEmp[b].length-1].ts - byEmp[a][byEmp[a].length-1].ts);
+  if(employees.length===0) return `<div class="empty">لا توجد رسائل بعد</div>`;
+  return employees.map(emp=>{
+    const msgs = byEmp[emp];
+    const last = msgs[msgs.length-1];
+    const needsReply = last.sender === 'employee';
+    const bubbles = msgs.slice(-12).map(m=>{
+      const mine = m.sender === 'kitchen';
+      const time = new Date(m.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="chat-bubble ${mine?'mine':'theirs'}">
+        <div>${escapeHtml(m.text)}</div>
+        <div class="chat-time">${time}</div>
+      </div>`;
+    }).join('');
+    const safeId = emp.replace(/[^a-zA-Z0-9]/g,'_');
+    return `
+    <div class="order-row ${needsReply?'new':''}">
+      <div class="top"><span>${emp}</span></div>
+      <div class="chat-box" style="max-height:180px;">${bubbles}</div>
+      <div class="chat-input-row">
+        <input type="text" id="chatReply_${safeId}" placeholder="رد على ${emp}..." />
+        <button class="btn-ghost" style="flex-shrink:0;" data-action="sendChat" data-employee="${emp}">إرسال</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 function balanceCardWithActions(){
   const owed = state.balance < 0;
@@ -986,6 +1059,7 @@ function kitchenScreen(){
   </div>
   <div class="card"><h2>🔔 الطلبات الجديدة</h2>${ordersHtml}</div>
   ${done.length? `<div class="card"><h2>✅ تم تحضيرها</h2>${doneHtml}</div>`:''}
+  <div class="card"><h2>💬 رسائل الموظفين</h2><p class="small" style="margin-top:-6px;">أي حد بيبعتلك رسالة هتلاقيها هنا، ورد عليه مباشرة</p>${chatThreadsHtml()}</div>
   <div class="card"><h2>💱 طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>💰 الأرصدة</h2>${balancesHtml}</div>
   <div class="card"><h2>🏷️ تعديل أسعار المنيو</h2><p class="small" style="margin-top:-6px;">غيّر السعر واضغط حفظ، هيتحدث فورًا لكل الموظفين</p>${priceEditHtml}</div>
@@ -993,35 +1067,42 @@ function kitchenScreen(){
 }
 function stockManagementHtml(){
   const stockableItems = [
-    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false, menu:true})),
-    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true, menu:true})),
-    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false, menu:false})),
-    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true, menu:false})),
-    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false, menu:false})),
-    ...state.customDrinks.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:true, menu:false})),
+    ...MENU.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:false})),
+    ...state.customMenu.map(it=>({id:it.id, name:it.name, cat:'بوفيه', custom:true})),
+    ...SNACKS.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:false})),
+    ...state.customSnacks.map(it=>({id:it.id, name:it.name, cat:'سناكس', custom:true})),
+    ...DRINKS.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:false})),
+    ...state.customDrinks.map(it=>({id:it.id, name:it.name, cat:'مشروبات', custom:true})),
   ];
-  const stockHtml = `<table class="balances">
-    <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
-    ${stockableItems.map(it=>{
-      const isOut = state.outOfStock.has(it.id);
-      if(it.menu){
-        const item = allMenuItems().find(x=>x.id===it.id) || it;
-        const baladiOut = state.outOfStock.has(stockKey(it.id,'baladi'));
-        const fransawiOut = state.outOfStock.has(stockKey(it.id,'fransawi'));
-        return `<tr><td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
-          <td>${item.baladi!=null?`<div class="small" style="color:${baladiOut?'#c53030':'var(--green-dark)'};font-weight:800;">بلدي: ${baladiOut?'متوقف':'متاح'}</div>`:''}${item.fransawi!=null?`<div class="small" style="color:${fransawiOut?'#c53030':'var(--green-dark)'};font-weight:800;">فرنساوي: ${fransawiOut?'متوقف':'متاح'}</div>`:''}</td>
-          <td>${item.baladi!=null?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;margin:2px;" data-action="toggleStock" data-id="${it.id}" data-type="baladi">${baladiOut?'تشغيل البلدي':'إيقاف البلدي'}</button>`:''}${item.fransawi!=null?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;margin:2px;" data-action="toggleStock" data-id="${it.id}" data-type="fransawi">${fransawiOut?'تشغيل الفرنساوي':'إيقاف الفرنساوي'}</button>`:''}${it.custom?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;margin:2px;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}</td></tr>`;
-      }
-      return `<tr><td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td><td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td><td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>${it.custom?`<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}</td></tr>`;
-    }).join('')}</table>`;
+  const stockHtml = `
+    <table class="balances">
+      <tr><th>الصنف</th><th>الحالة</th><th></th></tr>
+      ${stockableItems.map(it=>{
+        const isOut = state.outOfStock.has(it.id);
+        return `<tr>
+          <td>${it.name} <span class="small">(${it.cat}${it.custom?' — مُضاف':''})</span></td>
+          <td style="color:${isOut?'#c53030':'var(--green-dark)'};font-weight:800;">${isOut?'متوقف':'متاح'}</td>
+          <td>
+            <button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="toggleStock" data-id="${it.id}">${isOut?'إعادة تفعيل':'إيقاف'}</button>
+            ${it.custom? `<button class="btn-ghost" style="padding:5px 8px;font-size:11px;color:#c53030;" data-action="deleteItem" data-id="${it.id}">حذف</button>`:''}
+          </td>
+        </tr>`;
+      }).join('')}
+    </table>`;
   const addItemFormHtml = `
     <div style="margin-top:14px;">
       <label>القسم</label>
       <select id="newItemCat" style="width:100%;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);" onchange="document.getElementById('newItemPriceWrap').style.display = this.value==='drinks' ? 'none' : 'block'">
-        <option value="menu">بوفيه</option><option value="snack">سناكس</option><option value="drinks">مشروبات</option>
+        <option value="menu">بوفيه</option>
+        <option value="snack">سناكس</option>
+        <option value="drinks">مشروبات</option>
       </select>
-      <label style="margin-top:8px;">اسم الصنف</label><input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
-      <div id="newItemPriceWrap"><label style="margin-top:8px;">السعر</label><input type="number" id="newItemPrice" placeholder="مثلاً: 20" /></div>
+      <label style="margin-top:8px;">اسم الصنف</label>
+      <input type="text" id="newItemName" placeholder="مثلاً: سندوتش تونة" />
+      <div id="newItemPriceWrap">
+        <label style="margin-top:8px;">السعر</label>
+        <input type="number" id="newItemPrice" placeholder="مثلاً: 20" />
+      </div>
       <button class="btn-main" style="margin-top:10px;" data-action="addMenuItem">إضافة الصنف</button>
     </div>`;
   return `${stockHtml}${addItemFormHtml}`;
@@ -1149,16 +1230,12 @@ function orderRow(o, isPending, isAdminView){
 function renderTabs(){
   const tb = document.getElementById('tabbar');
   if(!state.role || !state.name){ tb.innerHTML=''; return; }
-  if(state.role==='employee'){
+  if(state.role==='employee' || state.role==='admin'){
     tb.innerHTML = `
       <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه وسناكس</button>
       ${canSeeDrinks()? `<button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>`:''}
-      <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>`;
-  } else if(state.role==='admin'){
-    tb.innerHTML = `
-      <button class="tab ${state.tab==='order'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍽️</span>بوفيه وسناكس</button>
-      ${canSeeDrinks()? `<button class="tab ${state.tab==='drinks'?'active':''}" data-action="tab" data-tab="drinks"><span class="ic">☕</span>مشروبات</button>`:''}
-      <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>`;
+      <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>
+      <button class="tab ${state.tab==='chat'?'active':''}" data-action="tab" data-tab="chat"><span class="ic">💬</span>شات ضياء${state.chatUnread? '<span class="chat-dot"></span>':''}</button>`;
   } else {
     tb.innerHTML = `<button class="tab active"><span class="ic">🍳</span>لوحة المطبخ</button>`;
   }
@@ -1177,6 +1254,8 @@ function bindEvents(){
         if(state._unsubCustomItems){ state._unsubCustomItems(); state._unsubCustomItems=null; }
         if(state._unsubPrices){ state._unsubPrices(); state._unsubPrices=null; }
         if(state._unsubBalanceRequests){ state._unsubBalanceRequests(); state._unsubBalanceRequests=null; }
+        if(state._unsubChat){ state._unsubChat(); state._unsubChat=null; }
+        state.chatMessages = []; state.chatUnread = false; state.hasChatPolledOnce = false;
         render();
       }
       else if(action==='setPayment'){ state.paymentMethod = el.dataset.method; render(); }
@@ -1227,11 +1306,18 @@ function bindEvents(){
         render();
       }
       else if(action==='confirmDrinkOrder'){ await submitDrinkOrder(); }
-      else if(action==='tab'){ state.tab = el.dataset.tab; render(); if(state.tab==='balance') refreshMyOrders(); }
+      else if(action==='tab'){
+        state.tab = el.dataset.tab;
+        if(state.tab==='chat') state.chatUnread = false;
+        render();
+        if(state.tab==='balance') refreshMyOrders();
+        if(state.tab==='chat') scrollChatToBottom();
+      }
+      else if(action==='sendChat'){ await handleSendChat(el.dataset.employee); }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
       else if(action==='savePrice'){ await handleSavePrice(el.dataset.id, el.dataset.mode); }
       else if(action==='confirmPayment'){ await confirmPayment(el.dataset.id); }
-      else if(action==='toggleStock'){ await toggleStock(el.dataset.id, el.dataset.type || null); }
+      else if(action==='toggleStock'){ await toggleStock(el.dataset.id); }
       else if(action==='openTopup'){ state.tab='balance'; state.topupMode='charge'; render(); }
       else if(action==='openWithdraw'){ state.tab='balance'; state.topupMode='withdraw'; render(); }
       else if(action==='closeTopup'){ state.topupMode=null; render(); }
@@ -1269,12 +1355,26 @@ async function afterLogin(){
   if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
   render();
   if(state.role==='employee' || state.role==='admin') refreshMyOrders();
+  if(state.role==='employee' || state.role==='admin'){
+    if(!state._unsubChat) state._unsubChat = listenMyChat(state.name, onMyChatUpdate);
+  }
   if(state.role==='kitchen'){
     if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
     if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
     if(!state._unsubBalanceRequests) state._unsubBalanceRequests = listenPendingBalanceRequests(reqs=>{
-      state.balanceRequests = reqs; render();
+      const prevIds = new Set((state.balanceRequests||[]).map(r=>r.id));
+      const fresh = reqs.filter(r=>!prevIds.has(r.id) && state.hasBalanceReqPolledOnce);
+      state.balanceRequests = reqs;
+      state.hasBalanceReqPolledOnce = true;
+      if(fresh.length>0 && state.kitchenUnlocked){
+        toast('طلب رصيد جديد');
+        playBeep();
+        const r = fresh[0];
+        notifyKitchen('طلب رصيد جديد 💳', r.name + ' - ' + (r.type==='withdraw'?'سحب':'شحن') + ' ' + fmt(r.amount||0));
+      }
+      render();
     });
+    if(!state._unsubChat) state._unsubChat = listenAllChat(onKitchenChatUpdate);
   }
   if(state.role==='kitchen'){ state.kitchenUnlocked = true; prepAlerts(); }
   if(!state._unsubStock) state._unsubStock = listenOutOfStock(ids=>{ state.outOfStock = new Set(ids); render(); });
@@ -1421,16 +1521,18 @@ async function submitOrder(){
   const note = noteEl ? noteEl.value.trim() : '';
   const order = {
     id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', balanceCharged:false, ts: Date.now(), status: 'pending', note, ...ip.extra
+    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', ts: Date.now(), status: 'pending', note, ...ip.extra
   };
   try{
     await saveOrder(order);
-    // الرصيد لا يُخصم الآن؛ الخصم يتم مرة واحدة فقط عند ضغط الشيف "تم التجهيز".
+    if(method === 'balance'){
+      await addToBalance(state.name, -total);
+      state.balance = state.balance - total;
+    }
     state.cart = {};
     state.snackCart = {};
-    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب — سيتم خصم الرصيد بعد تجهيز الطلب');
+    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
     render();
-    sendOrderPush(order);
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
 }
@@ -1442,18 +1544,61 @@ async function submitDrinkOrder(){
     const d = allDrinksItems().find(m=>m.id===id);
     items.push({name:d.name, qty:state.drinkCart[id].qty, price:0});
   }
+  const noteEl = document.getElementById('drinkOrderNote');
+  const note = noteEl ? noteEl.value.trim() : '';
   const order = {
     id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total: 0, kind:'drinks', ts: Date.now(), status: 'pending'
+    name: state.name, items, total: 0, kind:'drinks', ts: Date.now(), status: 'pending', note
   };
   try{
     await saveOrder(order);
     state.drinkCart = {};
     toast('تم إرسال طلب المشروبات إلى المطبخ');
     render();
-    sendOrderPush(order);
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+}
+async function handleSendChat(employeeDataset){
+  const isKitchenReply = !!employeeDataset;
+  const employee = isKitchenReply ? employeeDataset : state.name;
+  const inputId = isKitchenReply ? 'chatReply_'+employee.replace(/[^a-zA-Z0-9]/g,'_') : 'chatInput';
+  const inputEl = document.getElementById(inputId);
+  const text = inputEl ? inputEl.value.trim() : '';
+  if(!text) return;
+  if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  const sender = state.role==='kitchen' ? 'kitchen' : 'employee';
+  try{
+    if(inputEl) inputEl.value = '';
+    await sendChatMsg(employee, sender, text);
+  }catch(e){ toast('حدث خطأ أثناء إرسال الرسالة'); }
+}
+function scrollChatToBottom(){
+  setTimeout(()=>{ const box = document.getElementById('chatBox'); if(box) box.scrollTop = box.scrollHeight; }, 60);
+}
+function onMyChatUpdate(msgs){
+  const prevIds = new Set(state.chatMessages.map(m=>m.id));
+  const incomingKitchen = msgs.filter(m=>m.sender==='kitchen' && !prevIds.has(m.id) && state.hasChatPolledOnce);
+  state.chatMessages = msgs;
+  if(incomingKitchen.length>0){
+    if(state.tab!=='chat'){ state.chatUnread = true; }
+    toast('رسالة جديدة من ضياء 💬');
+  }
+  state.hasChatPolledOnce = true;
+  if(state.role==='employee' || state.role==='admin') render();
+  if(state.tab==='chat') scrollChatToBottom();
+}
+function onKitchenChatUpdate(msgs){
+  const prevIds = new Set(state.chatMessages.map(m=>m.id));
+  const incomingEmployee = msgs.filter(m=>m.sender==='employee' && !prevIds.has(m.id) && state.hasChatPolledOnce);
+  state.chatMessages = msgs;
+  if(incomingEmployee.length>0 && state.kitchenUnlocked){
+    toast('رسالة جديدة 💬');
+    playBeep();
+    const m = incomingEmployee[0];
+    notifyKitchen('رسالة جديدة من ' + (m.employee||'موظف') + ' 💬', m.text||'');
+  }
+  state.hasChatPolledOnce = true;
+  if(state.kitchenUnlocked) render();
 }
 async function refreshMyOrders(){
   const el = document.getElementById('myOrdersList');
@@ -1474,6 +1619,21 @@ function prepAlerts(){
   try{
     if(!state._audioCtx){ state._audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     if(state._audioCtx.state === 'suspended'){ state._audioCtx.resume(); }
+  }catch(e){}
+}
+// إشعار حقيقي لضياء بس، عن طريق الـ Service Worker لو متاح (بيشتغل حتى لو الشاشة مش فاتحة قدامه)
+// وبيرجع لطريقة Notification العادية لو الـ Service Worker مش جاهز.
+function notifyKitchen(title, body){
+  if(state.role!=='kitchen' || !state.kitchenUnlocked) return;
+  try{
+    if(!window.Notification || Notification.permission!=='granted') return;
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(reg=>{
+        reg.showNotification(title, {body, icon:'./icon-192.png', badge:'./icon-192.png', tag:title+Date.now()});
+      }).catch(()=>{ try{ new Notification(title, {body}); }catch(e){} });
+    } else {
+      new Notification(title, {body});
+    }
   }catch(e){}
 }
 function playBeep(){
@@ -1504,7 +1664,7 @@ function onOrdersUpdate(orders){
   if(newPending.length>0 && isKitchenDevice){
     toast('تم استلام طلب جديد');
     playBeep();
-    try{ if(window.Notification && Notification.permission==='granted'){ new Notification('EV Raid Buffet - طلب جديد', {body: newPending[0].name}); } }catch(e){}
+    notifyKitchen('طلب جديد 🧾', newPending[0].name + ' - ' + (newPending[0].kind==='drinks' ? 'مشروبات' : fmt(newPending[0].total||0)));
   }
   state.hasPolledOnce = true;
   if(isKitchenDevice || state.role==='admin') render();

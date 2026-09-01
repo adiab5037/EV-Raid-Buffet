@@ -492,10 +492,12 @@ let state = {
   topupMode: null, balanceRequests: [],
   chatMessages: [], chatUnread: false, hasChatPolledOnce: false,
   seenOrderIds: new Set(),
+  transactions: [],
   kitchenUnlocked: false,
   kitchenLogDate: null,
+  kitchenTxDate: null,
   hasPolledOnce: false,
-  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null,
   _audioCtx: null,
 };
 
@@ -513,6 +515,7 @@ function todayStr(){
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 function setKitchenLogDate(v){ state.kitchenLogDate = v; render(); }
+function setKitchenTxDate(v){ state.kitchenTxDate = v; render(); }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
@@ -637,13 +640,25 @@ async function getBalance(name){
     return doc.exists ? (doc.data().value || 0) : 0;
   }catch(e){ return 0; }
 }
-async function addToBalance(name, delta){
+// كل مرة الرصيد بيتغير، بنسجل حركة في سجل المعاملات المالية (transactions) عشان يبقى فيه تتبّع كامل
+async function addToBalance(name, delta, type, note){
   if(!firebaseReady) return;
   const ref = db.collection('balances').doc(name);
   await db.runTransaction(async (t)=>{
     const doc = await t.get(ref);
     const cur = doc.exists ? (doc.data().value || 0) : 0;
     t.set(ref, {value: cur + delta}, {merge:true});
+  });
+  try{
+    await db.collection('transactions').add({
+      name, delta, type: type || 'أخرى', note: note || '', ts: Date.now()
+    });
+  }catch(e){ console.error('transaction log failed', e); }
+}
+function listenTransactions(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('transactions').orderBy('ts','desc').limit(300).onSnapshot(snap=>{
+    cb(snap.docs.map(d=>({id:d.id, ...d.data()})));
   });
 }
 // طلبات شحن/سحب الرصيد اللي الموظف بيبعتها، وبتحتاج موافقة الشيف أو الأدمن
@@ -670,7 +685,7 @@ async function approveBalanceRequest(id){
   if(!doc.exists || doc.data().status !== 'pending') return;
   const req = doc.data();
   await ref.update({status:'approved'});
-  await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount);
+  await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount, req.kind==='charge' ? 'شحن رصيد' : 'سحب رصيد', 'موافقة على طلب ' + (req.kind==='charge'?'شحن':'سحب'));
 }
 async function saveOrder(order){
   if(!firebaseReady) return;
@@ -1005,9 +1020,7 @@ function balanceScreen(){
 }
 function kitchenScreen(){
   const pending = state.orders.filter(o=>o.status==='pending');
-  const done = state.orders.filter(o=>o.status==='done');
   const ordersHtml = pending.length? pending.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
-  const doneHtml = done.slice(0,10).map(o=>orderRow(o,false)).join('');
   const balancesHtml = state.balances.length? `
     <table class="balances">
       <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
@@ -1063,30 +1076,54 @@ function kitchenScreen(){
       }).join('')}
     </table>`;
   const logDate = state.kitchenLogDate || todayStr();
-  const dayOrders = state.orders.filter(o=>{
-    const d = new Date(o.ts);
+  const dateStr = (ts)=>{
+    const d = new Date(ts);
     const pad = (n)=> String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` === logDate;
-  }).sort((a,b)=>b.ts-a.ts);
-  const dayTotal = dayOrders.reduce((s,o)=>s+(o.total||0),0);
-  const orderLogHtml = dayOrders.length
-    ? dayOrders.map(o=>orderRow(o, o.status==='pending', true)).join('')
-    : `<div class="empty">مفيش طلبات في اليوم ده</div>`;
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  };
+  // سجل الطلبات بيعرض الطلبات اللي "تم تحضيرها" بس — الطلبات الجديدة (قيد التحضير) موجودة في كارت "الطلبات الجديدة" لوحدها
+  const dayDone = state.orders.filter(o=>o.status==='done' && dateStr(o.ts)===logDate).sort((a,b)=>b.ts-a.ts);
+  const dayTotal = dayDone.reduce((s,o)=>s+(o.total||0),0);
+  const orderLogHtml = dayDone.length
+    ? dayDone.map(o=>orderRow(o, false, true)).join('')
+    : `<div class="empty">مفيش طلبات تم تحضيرها في اليوم ده</div>`;
+  // سجل المعاملات المالية بتاريخ مستقل عن سجل الطلبات، بنفس فكرة اختيار اليوم
+  const txDate = state.kitchenTxDate || todayStr();
+  const dayTx = (state.transactions||[]).filter(t=>dateStr(t.ts)===txDate).sort((a,b)=>b.ts-a.ts);
+  const txTotal = dayTx.reduce((s,t)=>s+(t.delta||0),0);
+  const txHtml = dayTx.length ? dayTx.map(t=>{
+    const time = new Date(t.ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+    const isPositive = t.delta > 0;
+    return `<div class="order-row">
+      <div class="top"><span>${t.name}</span><span style="color:${isPositive?'var(--green-dark)':'#c53030'};">${isPositive?'+':''}${fmt(t.delta)}</span></div>
+      <div class="items">${t.type}${t.note? ' — '+t.note : ''}</div>
+      <div class="small">${time}</div>
+    </div>`;
+  }).join('') : `<div class="empty">مفيش معاملات مالية في اليوم ده</div>`;
   return `
   <div class="card">
     <h2>📅 سجل الطلبات</h2>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <p class="small" style="margin-top:-6px;">الطلبات اللي تم تحضيرها بس — الطلبات لسه قيد التحضير هتلاقيها في كارت "الطلبات الجديدة" تحت</p>
+    <div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
       <input type="date" id="kitchenLogDate" value="${logDate}" max="${todayStr()}" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);color:var(--ink);font-family:'Tajawal';font-size:14px;" onchange="setKitchenLogDate(this.value)" />
-      <span class="small" style="white-space:nowrap;">${dayOrders.length} طلب · ${fmt(dayTotal)}</span>
+      <span class="small" style="white-space:nowrap;">${dayDone.length} طلب · ${fmt(dayTotal)}</span>
     </div>
     ${orderLogHtml}
+  </div>
+  <div class="card">
+    <h2>💵 سجل المعاملات المالية</h2>
+    <p class="small" style="margin-top:-6px;">كل حركة على أرصدة الموظفين (شحن، سحب، خصم طلبات، واسترداد فروق) — اختر اليوم لوحده هنا</p>
+    <div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+      <input type="date" id="kitchenTxDate" value="${txDate}" max="${todayStr()}" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);color:var(--ink);font-family:'Tajawal';font-size:14px;" onchange="setKitchenTxDate(this.value)" />
+      <span class="small" style="white-space:nowrap;">${dayTx.length} حركة · ${fmt(txTotal)}</span>
+    </div>
+    ${txHtml}
   </div>
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
   <div class="card"><h2>🔔 الطلبات الجديدة</h2>${ordersHtml}</div>
-  ${done.length? `<div class="card"><h2>✅ تم تحضيرها</h2>${doneHtml}</div>`:''}
   <div class="card"><h2>💬 رسائل الموظفين</h2><p class="small" style="margin-top:-6px;">أي حد بيبعتلك رسالة هتلاقيها هنا، ورد عليه مباشرة</p>${chatThreadsHtml()}</div>
   <div class="card"><h2>💱 طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>💰 الأرصدة</h2>${balancesHtml}</div>
@@ -1308,6 +1345,7 @@ function bindEvents(){
         if(state._unsubCustomItems){ state._unsubCustomItems(); state._unsubCustomItems=null; }
         if(state._unsubPrices){ state._unsubPrices(); state._unsubPrices=null; }
         if(state._unsubBalanceRequests){ state._unsubBalanceRequests(); state._unsubBalanceRequests=null; }
+        if(state._unsubTransactions){ state._unsubTransactions(); state._unsubTransactions=null; }
         if(state._unsubChat){ state._unsubChat(); state._unsubChat=null; }
         state.chatMessages = []; state.chatUnread = false; state.hasChatPolledOnce = false;
         render();
@@ -1401,7 +1439,7 @@ function bindEvents(){
         const name = el.dataset.name;
         const amt = prompt('قيمة الدفعة (ج.م) لـ '+name+':');
         if(amt && !isNaN(amt) && parseFloat(amt)>0){
-          await addToBalance(name, parseFloat(amt));
+          await addToBalance(name, parseFloat(amt), 'شحن رصيد', 'تسجيل دفعة يدوي من الشيف');
           toast('تم تسجيل الدفعة بنجاح');
         }
       }
@@ -1418,6 +1456,7 @@ async function afterLogin(){
   if(state.role==='kitchen'){
     if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
     if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
+    if(!state._unsubTransactions) state._unsubTransactions = listenTransactions(txs=>{ state.transactions = txs; if(state.kitchenUnlocked) render(); });
     if(!state._unsubBalanceRequests) state._unsubBalanceRequests = listenPendingBalanceRequests(reqs=>{
       const prevIds = new Set((state.balanceRequests||[]).map(r=>r.id));
       const fresh = reqs.filter(r=>!prevIds.has(r.id) && state.hasBalanceReqPolledOnce);
@@ -1550,7 +1589,7 @@ async function substituteOrderItem(orderId, idx, newType){
     const newTotal = (order.total||0) + delta;
     await ref.update({items:newItems, total:newTotal});
     if(order.paymentMethod === 'balance' && delta !== 0){
-      await addToBalance(order.name, -delta);
+      await addToBalance(order.name, -delta, delta>0?'فرق استبدال صنف (خصم)':'فرق استبدال صنف (استرداد)', `استبدال ${item.name} إلى ${newType==='baladi'?'بلدي':'فرنساوي'} — طلب #${orderId.slice(-5)}`);
     }
     toast('تم الاستبدال وتحديث السعر');
   }catch(e){ toast('حدث خطأ أثناء الاستبدال'); }
@@ -1575,7 +1614,7 @@ async function adjustOrderItemQty(orderId, idx, delta){
     const newTotal = Math.max(0, (order.total||0) + priceDelta);
     await ref.update({items:newItems, total:newTotal});
     if(order.paymentMethod === 'balance' && priceDelta !== 0){
-      await addToBalance(order.name, -priceDelta);
+      await addToBalance(order.name, -priceDelta, priceDelta>0?'زيادة كمية (خصم)':'تقليل كمية (استرداد)', `${item.name} — طلب #${orderId.slice(-5)}`);
     }
     toast(delta>0? 'تم زيادة الكمية' : 'تم تقليل الكمية، والفرق اتضاف لرصيد الموظف');
   }catch(e){ toast('حدث خطأ أثناء تعديل الكمية'); }
@@ -1595,7 +1634,7 @@ async function removeOrderItem(orderId, idx){
     const newTotal = Math.max(0, (order.total||0) - lineTotal);
     await ref.update({items:newItems, total:newTotal});
     if(order.paymentMethod === 'balance' && lineTotal !== 0){
-      await addToBalance(order.name, lineTotal);
+      await addToBalance(order.name, lineTotal, 'حذف صنف (استرداد)', `${item.name} — طلب #${orderId.slice(-5)}`);
     }
     toast('تم حذف الصنف من الطلب، والقيمة اتردت لرصيد الموظف');
   }catch(e){ toast('حدث خطأ أثناء الحذف'); }
@@ -1654,7 +1693,7 @@ async function submitOrder(){
   try{
     await saveOrder(order);
     if(method === 'balance'){
-      await addToBalance(state.name, -total);
+      await addToBalance(state.name, -total, 'خصم طلب', `طلب #${order.id.slice(-5)}`);
       state.balance = state.balance - total;
     }
     state.cart = {};

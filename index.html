@@ -493,6 +493,7 @@ let state = {
   chatMessages: [], chatUnread: false, hasChatPolledOnce: false,
   seenOrderIds: new Set(),
   kitchenUnlocked: false,
+  kitchenLogDate: null,
   hasPolledOnce: false,
   _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null,
   _audioCtx: null,
@@ -505,6 +506,13 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 function fmt(n){ return (n<0? '-' : '') + Math.abs(n) + ' ج.م'; }
+// ييرجع تاريخ اليوم بصيغة YYYY-MM-DD (بتوقيت الجهاز) عشان نستخدمها في حقل input[type=date]
+function todayStr(){
+  const d = new Date();
+  const pad = (n)=> String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function setKitchenLogDate(v){ state.kitchenLogDate = v; render(); }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
@@ -1054,7 +1062,25 @@ function kitchenScreen(){
         </tr>`;
       }).join('')}
     </table>`;
+  const logDate = state.kitchenLogDate || todayStr();
+  const dayOrders = state.orders.filter(o=>{
+    const d = new Date(o.ts);
+    const pad = (n)=> String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` === logDate;
+  }).sort((a,b)=>b.ts-a.ts);
+  const dayTotal = dayOrders.reduce((s,o)=>s+(o.total||0),0);
+  const orderLogHtml = dayOrders.length
+    ? dayOrders.map(o=>orderRow(o, o.status==='pending', true)).join('')
+    : `<div class="empty">مفيش طلبات في اليوم ده</div>`;
   return `
+  <div class="card">
+    <h2>📅 سجل الطلبات</h2>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <input type="date" id="kitchenLogDate" value="${logDate}" max="${todayStr()}" style="flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--card-2);color:var(--ink);font-family:'Tajawal';font-size:14px;" onchange="setKitchenLogDate(this.value)" />
+      <span class="small" style="white-space:nowrap;">${dayOrders.length} طلب · ${fmt(dayTotal)}</span>
+    </div>
+    ${orderLogHtml}
+  </div>
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
@@ -1238,11 +1264,14 @@ function orderRow(o, isPending, isAdminView){
   const paymentBadge = (!isDrinks && o.paymentMethod==='cash') ? `
     <div class="small" style="margin-top:4px;color:${o.paymentConfirmed?'var(--green-dark)':'#c53030'};font-weight:700;">${o.paymentConfirmed? '✓ الفلوس استلمت':'⏳ لسه مستلمتش الفلوس'}</div>` : '';
   const noteHtml = o.note ? `<div class="small" style="margin-top:6px;background:var(--card-2);border-radius:8px;padding:6px 10px;">📝 ${o.note}</div>` : '';
+  const statusBadge = o.status==='done'
+    ? `<span style="color:var(--green-dark);font-weight:700;">✅ تم التجهيز</span>`
+    : `<span style="color:var(--navy);font-weight:700;">⏳ قيد التحضير</span>`;
   return `
   <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}">
     <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
     <div class="items">${itemsHtml}</div>
-    <div class="small">${time}${payBadge? ' · '+payBadge : ''}</div>
+    <div class="small">${time}${payBadge? ' · '+payBadge : ''} · ${statusBadge}</div>
     ${paymentBadge}
     ${noteHtml}
     ${instapayInfo}

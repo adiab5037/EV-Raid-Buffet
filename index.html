@@ -5,7 +5,7 @@
 <title>EV Raid Buffet</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#0b4271">
+<meta name="theme-color" content="#0b3f6b">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -51,27 +51,33 @@
 
 <style>
   :root{
-    --bg-1:#eef2f6;
-    --bg-2:#f7f8fa;
+    --bg-1:#eef1f6;
+    --bg-2:#f8f6f0;
     --card:#ffffff;
-    --card-2:#f4f7fa;
-    --ink:#12222f;
-    --navy:#0b4271;
-    --navy-deep:#082f52;
-    --green:#79ba48;
-    --green-dark:#3f7a2c;
-    --muted:#5b6b7a;
-    --line:rgba(11,66,113,0.10);
+    --card-2:#f5f6f9;
+    --ink:#101b28;
+    --navy:#0b3f6b;
+    --navy-deep:#062038;
+    --green:#7ab850;
+    --green-dark:#356424;
+    --gold:#c9a24b;
+    --gold-deep:#a9812f;
+    --muted:#60707f;
+    --line:rgba(11,63,107,0.10);
     --danger:#c0392b;
-    --radius-sm:10px;
-    --radius-md:14px;
-    --radius-lg:18px;
+    --radius-sm:12px;
+    --radius-md:16px;
+    --radius-lg:22px;
+    --shadow-card:0 1px 2px rgba(8,32,56,0.04), 0 14px 32px -12px rgba(8,32,56,0.16);
+    --shadow-pop:0 10px 26px -8px rgba(8,32,56,0.28);
   }
   *{box-sizing:border-box;}
   body{
     margin:0;
     font-family:'Tajawal',sans-serif;
-    background: linear-gradient(175deg, var(--bg-1), var(--bg-2) 65%);
+    background:
+      radial-gradient(1100px 480px at 50% -180px, rgba(201,162,75,0.12), transparent 60%),
+      linear-gradient(175deg, var(--bg-1), var(--bg-2) 70%);
     color:var(--ink);
     min-height:100vh;
     display:flex;
@@ -82,23 +88,27 @@
     width:100%;
     max-width:460px;
     min-height:100vh;
-    padding:18px 16px 90px;
+    padding:18px 16px 96px;
     position:relative;
   }
   .balance-badge{
     position:absolute;
     top:18px; right:16px;
     display:flex; align-items:center; gap:6px;
-    background:#ffffff;
+    background:rgba(255,255,255,0.86);
+    -webkit-backdrop-filter:blur(10px);
+    backdrop-filter:blur(10px);
     border:1px solid var(--line);
-    box-shadow:0 2px 10px rgba(15,42,66,0.08);
+    box-shadow:0 4px 16px rgba(8,32,56,0.10);
     border-radius:30px;
-    padding:7px 12px;
-    font-weight:700;
+    padding:7px 13px;
+    font-weight:800;
     font-size:13px;
     cursor:pointer;
     z-index:20;
+    transition:transform 0.15s ease;
   }
+  .balance-badge:active{transform:scale(0.96);}
   .balance-badge.owe{color:#b3413a;border-color:rgba(179,65,58,0.35);animation:badgePulse 2.2s infinite;}
   .balance-badge.ok{color:var(--green-dark);}
   @keyframes badgePulse{0%{box-shadow:0 2px 10px rgba(179,65,58,0.10);}50%{box-shadow:0 2px 14px rgba(179,65,58,0.28);}100%{box-shadow:0 2px 10px rgba(179,65,58,0.10);}}
@@ -120,9 +130,9 @@
     font-weight:500;
   }
   .brand .rule{
-    width:36px;height:3px;margin:14px auto 0;
+    width:40px;height:3px;margin:14px auto 0;
     border-radius:2px;
-    background:var(--green);
+    background:linear-gradient(90deg, var(--green), var(--gold));
   }
   .brand-wave{
     width:100%;
@@ -160,12 +170,18 @@
     background:var(--card);
     color:var(--ink);
     border-radius:var(--radius-lg);
-    padding:20px 18px 18px;
-    box-shadow:0 1px 3px rgba(11,66,113,0.05), 0 8px 20px rgba(11,66,113,0.05);
+    padding:22px 20px 20px;
+    box-shadow:var(--shadow-card);
     border:1px solid var(--line);
-    border-right:3px solid var(--green);
-    margin-bottom:14px;
+    margin-bottom:16px;
     overflow:hidden;
+  }
+  .card::before{
+    content:'';
+    position:absolute;
+    top:0; right:0; bottom:0;
+    width:4px;
+    background:linear-gradient(180deg, var(--gold), var(--green));
   }
   .card h2{
     font-family:'Poppins',sans-serif;
@@ -181,15 +197,16 @@
   input[type=text], input[type=email], input[type=tel], input[type=number], input[type=password]{
     width:100%;
     padding:11px 12px;
-    border-radius:8px;
+    border-radius:10px;
     border:1.5px solid var(--line);
     background:var(--card-2);
     font-family:'Tajawal';
     font-size:15px;
     color:var(--ink);
     outline:none;
+    transition:border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  input:focus{border-color:var(--green);}
+  input:focus{border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,162,75,0.15);}
   button{
     font-family:'Tajawal';
     cursor:pointer;
@@ -199,28 +216,33 @@
     width:100%;
     padding:13px;
     border-radius:var(--radius-md);
-    background:var(--navy);
+    background:linear-gradient(135deg, var(--navy), var(--navy-deep));
     color:#fff;
     font-weight:700;
     font-size:14.5px;
     margin-top:10px;
     letter-spacing:0.2px;
-    box-shadow:0 3px 10px rgba(11,66,113,0.22);
-    transition:transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    box-shadow:var(--shadow-pop);
+    transition:transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
   }
-  .btn-main:active{transform:translateY(1px); box-shadow:0 2px 6px rgba(11,66,113,0.18); background:var(--navy-deep);}
+  .btn-main:active{transform:translateY(1px) scale(0.99); filter:brightness(0.94);}
   .btn-main:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-main.btn-confirm{
+    background:linear-gradient(135deg, var(--green), var(--green-dark));
+    box-shadow:0 10px 26px -8px rgba(53,100,36,0.4);
+  }
+  .btn-main.btn-confirm:active{filter:brightness(0.92);}
   .btn-ghost{
-    padding:9px 14px;
+    padding:9px 15px;
     border-radius:var(--radius-sm);
     background:transparent;
     border:1.5px solid var(--navy);
     color:var(--navy);
     font-weight:700;
     font-size:12.5px;
-    transition:background 0.12s ease;
+    transition:background 0.12s ease, transform 0.1s ease;
   }
-  .btn-ghost:active{background:rgba(11,66,113,0.08);}
+  .btn-ghost:active{background:rgba(11,63,107,0.08); transform:scale(0.97);}
   .tabs{
     position:fixed;
     bottom:0;left:0;right:0;
@@ -231,10 +253,12 @@
   .tabs-inner{
     width:100%;max-width:460px;
     display:flex;
-    background:#ffffff;
+    background:rgba(255,255,255,0.88);
+    -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px);
     border-top:1px solid var(--line);
-    border-radius:20px 20px 0 0;
-    box-shadow:0 -4px 16px rgba(15,42,74,0.08);
+    border-radius:22px 22px 0 0;
+    box-shadow:0 -8px 24px rgba(8,32,56,0.10);
   }
   .tab{
     flex:1;
@@ -242,7 +266,7 @@
     padding:10px 4px 8px;
     margin:6px 3px;
     background:none;
-    border-radius:12px;
+    border-radius:14px;
     color:var(--muted);
     opacity:0.75;
     font-size:11.5px;
@@ -250,8 +274,8 @@
     display:flex;flex-direction:column;align-items:center;gap:3px;
     transition:background 0.15s ease, opacity 0.15s ease;
   }
-  .tab.active{opacity:1;color:var(--navy);background:rgba(11,66,113,0.08);}
-  .tab.active .ic{color:var(--green-dark);}
+  .tab.active{opacity:1;color:var(--navy);background:linear-gradient(135deg, rgba(11,63,107,0.10), rgba(201,162,75,0.12));}
+  .tab.active .ic{color:var(--gold-deep);}
   .tab .ic{font-size:19px;}
   .menu-item{
     display:flex;
@@ -264,44 +288,47 @@
   .menu-item .name{font-weight:700;font-size:15px;}
   .price-row{display:flex;gap:6px;margin-top:6px;}
   .price-btn{
-    padding:6px 12px;
+    padding:7px 13px;
     border-radius:20px;
-    background:rgba(20,51,92,0.05);
-    border:1px solid rgba(20,51,92,0.2);
+    background:rgba(11,63,107,0.05);
+    border:1px solid rgba(11,63,107,0.2);
     color:var(--navy);
     font-size:12px;
     font-weight:700;
+    transition:background 0.12s ease, transform 0.1s ease;
   }
-  .price-btn.selected{background:var(--green); border-color:var(--green); color:#fff;}
+  .price-btn:active{transform:scale(0.96);}
+  .price-btn.selected{background:linear-gradient(135deg, var(--green), var(--green-dark)); border-color:transparent; color:#fff; box-shadow:0 4px 12px rgba(53,100,36,0.3);}
   .cart-bar{
     position:sticky;
     bottom:66px;
-    background:var(--navy);
+    background:linear-gradient(135deg, var(--navy), var(--navy-deep));
     color:#fff;
-    border-radius:12px;
+    border-radius:var(--radius-md);
     padding:12px 14px;
     display:flex;
     justify-content:space-between;
     align-items:center;
     font-weight:800;
-    box-shadow:0 8px 20px rgba(20,51,92,0.3);
+    box-shadow:var(--shadow-pop);
     margin-top:6px;
   }
   .cart-bar .btn-main{box-shadow:none;}
-  .balance-box{ text-align:center; padding:14px; }
+  .balance-box{ text-align:center; padding:16px; }
   .balance-box .amt{ font-family:'Poppins',sans-serif; font-weight:800; font-size:38px; color:var(--navy); }
   .balance-box .amt.owe{color:#c53030;}
   .balance-box .amt.ok{color:var(--green-dark);}
   .order-row{
     background:var(--card-2);
-    border-radius:10px;
-    padding:10px 12px;
-    margin-bottom:8px;
+    border-radius:var(--radius-sm);
+    padding:11px 13px;
+    margin-bottom:9px;
     font-size:13px;
     border-right:4px solid var(--navy);
+    box-shadow:0 1px 2px rgba(8,32,56,0.04);
   }
-  .order-row.new{border-right-color:var(--green); animation:pulse 1.4s infinite;}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(121,186,72,0.4);}70%{box-shadow:0 0 0 8px rgba(121,186,72,0);}100%{box-shadow:0 0 0 0 rgba(121,186,72,0);}}
+  .order-row.new{border-right-color:var(--gold); animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(201,162,75,0.4);}70%{box-shadow:0 0 0 8px rgba(201,162,75,0);}100%{box-shadow:0 0 0 0 rgba(201,162,75,0);}}
   .order-row .top{display:flex;justify-content:space-between;font-weight:800;margin-bottom:4px;}
   .order-row .items{opacity:0.75;}
   .order-row .actions{margin-top:8px;display:flex;gap:8px;}
@@ -344,14 +371,14 @@
   }
   .toast{
     position:fixed;top:14px;left:50%;transform:translateX(-50%);
-    background:var(--green-dark);color:#fff;padding:10px 18px;border-radius:30px;
-    font-weight:700;font-size:13px;z-index:100;box-shadow:0 6px 18px rgba(20,51,92,0.3);
+    background:linear-gradient(135deg, var(--green), var(--green-dark));color:#fff;padding:10px 20px;border-radius:30px;
+    font-weight:700;font-size:13px;z-index:100;box-shadow:0 10px 26px -6px rgba(53,100,36,0.4);
     opacity:0;pointer-events:none;transition:opacity .3s, top .3s;
   }
   .toast.show{opacity:1;top:24px;}
   .stepper{display:flex;align-items:center;gap:8px;}
   .stepper button{
-    width:26px;height:26px;border-radius:6px;background:var(--navy);color:#fff;font-weight:900;font-size:15px;line-height:1;
+    width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg, var(--navy), var(--navy-deep));color:#fff;font-weight:900;font-size:15px;line-height:1;
   }
   .qty-badge{min-width:20px;text-align:center;font-weight:800;}
   table.balances{width:100%;border-collapse:collapse;font-size:13px;}
@@ -369,8 +396,8 @@
     <svg class="brand-wave" viewBox="0 0 400 14" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="waveGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#79ba48" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="#0b4271" stop-opacity="0.35"/>
+          <stop offset="0%" stop-color="#c9a24b" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#0b3f6b" stop-opacity="0.4"/>
         </linearGradient>
       </defs>
       <path d="M0,7 C50,0 100,14 150,7 C200,0 250,14 300,7 C330,3 370,3 400,7" stroke="url(#waveGrad)" stroke-width="2" fill="none" stroke-linecap="round"/>
@@ -497,7 +524,8 @@ let state = {
   kitchenLogDate: null,
   kitchenTxDate: null,
   hasPolledOnce: false,
-  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null,
+  myOrders: [], hasMyOrdersLoaded: false, _myOrderStatus: null,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null, _unsubMyOrders: null,
   _audioCtx: null,
 };
 
@@ -699,10 +727,51 @@ async function confirmPayment(id){
   if(!firebaseReady) return;
   await db.collection('orders').doc(id).update({paymentConfirmed:true});
 }
+// الشيف بيقبل الطلب — هنا بس الفلوس بتتخصم فعليًا (لو الدفع من الرصيد)
+async function acceptOrder(id){
+  if(!firebaseReady) return;
+  try{
+    const ref = db.collection('orders').doc(id);
+    const doc = await ref.get();
+    if(!doc.exists) return;
+    const order = doc.data();
+    if(order.status !== 'pending') return;
+    await ref.update({status:'accepted'});
+    if(order.paymentMethod === 'balance' && !order.paymentDeducted){
+      await addToBalance(order.name, -(order.total||0), 'خصم طلب', `تأكيد الشيف — طلب #${id.slice(-5)}`);
+      await ref.update({paymentDeducted:true});
+    }
+    toast('تم قبول الطلب');
+  }catch(e){ toast('حدث خطأ أثناء قبول الطلب'); }
+}
+// الشيف بيرفض/يلغي الطلب — لو الفلوس كانت اتخصمت بالفعل بترجع لصاحبها تلقائيًا
+async function rejectOrder(id){
+  if(!firebaseReady) return;
+  try{
+    const ref = db.collection('orders').doc(id);
+    const doc = await ref.get();
+    if(!doc.exists) return;
+    const order = doc.data();
+    if(order.status === 'done' || order.status === 'cancelled') return;
+    await ref.update({status:'cancelled'});
+    if(order.paymentMethod === 'balance' && order.paymentDeducted){
+      await addToBalance(order.name, (order.total||0), 'استرداد', `إلغاء الشيف للطلب #${id.slice(-5)}`);
+      await ref.update({paymentDeducted:false});
+    }
+    toast('تم إلغاء الطلب' + (order.paymentMethod==='balance' && order.paymentDeducted ? '، وترجعت الفلوس لصاحب الطلب' : ''));
+  }catch(e){ toast('حدث خطأ أثناء إلغاء الطلب'); }
+}
 
 function listenOrders(cb){
   if(!firebaseReady) return ()=>{};
   return db.collection('orders').orderBy('ts','desc').onSnapshot(snap=>{
+    cb(snap.docs.map(d=>d.data()));
+  });
+}
+// طلبات الموظف نفسه — لايف عشان لما الطلب يوصل للشيف أو يتقبل/يتم تجهيزه، الموظف يشوف الحالة تتحدث فورًا
+function listenMyOrders(name, cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('orders').where('name','==',name).orderBy('ts','desc').limit(8).onSnapshot(snap=>{
     cb(snap.docs.map(d=>d.data()));
   });
 }
@@ -845,7 +914,7 @@ function orderScreen(){
   ${paymentMethodBlock()}
   <div class="cart-bar">
     <span>الإجمالي: ${fmt(total)}</span>
-    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
+    <button class="btn-main btn-confirm" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
   </div>`:''}`;
 }
 function allMenuItems(){ return [...MENU, ...state.customMenu].map(withOverride); }
@@ -907,7 +976,7 @@ function drinksScreen(){
   </div>
   <div class="cart-bar">
     <span>عدد الأصناف: ${drinkCount}</span>
-    <button class="btn-main" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmDrinkOrder">تأكيد الطلب</button>
+    <button class="btn-main btn-confirm" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmDrinkOrder">تأكيد الطلب</button>
   </div>`:''}`;
 }
 function chatScreen(){
@@ -1010,17 +1079,20 @@ function balanceCardWithActions(){
   ${topupFormHtml}${withdrawFormHtml}`;
 }
 function balanceScreen(){
+  const myOrdersHtml = state.myOrders.length
+    ? state.myOrders.map(o=>orderRow(o,false)).join('')
+    : (state.hasMyOrdersLoaded ? `<div class="empty">لم يتم تقديم أي طلب بعد</div>` : `<div class="empty">جارِ التحميل...</div>`);
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
   ${balanceCardWithActions()}
-  <div class="card"><h2>🧾 آخر طلباتي</h2><div id="myOrdersList" class="small">جارِ التحميل...</div></div>`;
+  <div class="card"><h2>🧾 آخر طلباتي</h2><p class="small" style="margin-top:-6px;">هتلاقي هنا حالة كل طلب لحظة بلحظة</p><div id="myOrdersList">${myOrdersHtml}</div></div>`;
 }
 function kitchenScreen(){
-  const pending = state.orders.filter(o=>o.status==='pending');
-  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
+  const pending = state.orders.filter(o=>o.status==='pending' || o.status==='accepted');
+  const ordersHtml = pending.length? pending.map(o=>orderRow(o,true,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
   const balancesHtml = state.balances.length? `
     <table class="balances">
       <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
@@ -1301,11 +1373,18 @@ function orderRow(o, isPending, isAdminView){
   const paymentBadge = (!isDrinks && o.paymentMethod==='cash') ? `
     <div class="small" style="margin-top:4px;color:${o.paymentConfirmed?'var(--green-dark)':'#c53030'};font-weight:700;">${o.paymentConfirmed? '✓ الفلوس استلمت':'⏳ لسه مستلمتش الفلوس'}</div>` : '';
   const noteHtml = o.note ? `<div class="small" style="margin-top:6px;background:var(--card-2);border-radius:8px;padding:6px 10px;">📝 ${o.note}</div>` : '';
+  const statusColor = o.status==='done' ? 'var(--green-dark)' : o.status==='cancelled' ? 'var(--danger)' : o.status==='accepted' ? 'var(--navy)' : 'var(--gold-deep)';
   const statusBadge = o.status==='done'
     ? `<span style="color:var(--green-dark);font-weight:700;">✅ تم التجهيز</span>`
-    : `<span style="color:var(--navy);font-weight:700;">⏳ قيد التحضير</span>`;
+    : o.status==='cancelled'
+    ? `<span style="color:var(--danger);font-weight:700;">✕ ملغي</span>`
+    : o.status==='accepted'
+    ? `<span style="color:var(--navy);font-weight:700;">⏳ قيد التحضير</span>`
+    : `<span style="color:var(--gold-deep);font-weight:700;">🆕 بانتظار القبول</span>`;
+  const awaitingAccept = isPending && o.status==='pending';
+  const accepted = isPending && o.status==='accepted';
   return `
-  <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}">
+  <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}" style="border-right-color:${statusColor};">
     <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
     <div class="items">${itemsHtml}</div>
     <div class="small">${time}${payBadge? ' · '+payBadge : ''} · ${statusBadge}</div>
@@ -1313,7 +1392,9 @@ function orderRow(o, isPending, isAdminView){
     ${noteHtml}
     ${instapayInfo}
     <div class="actions">
-      ${isPending? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
+      ${awaitingAccept? `<button class="btn-main btn-confirm" style="width:auto;margin:0;padding:8px 14px;" data-action="acceptOrder" data-id="${o.id}">قبول الطلب ✓</button>`:''}
+      ${(awaitingAccept||accepted)? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" data-action="rejectOrder" data-id="${o.id}">إلغاء الطلب ✕</button>`:''}
+      ${accepted? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
       ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
     </div>
   </div>`;
@@ -1346,6 +1427,8 @@ function bindEvents(){
         if(state._unsubPrices){ state._unsubPrices(); state._unsubPrices=null; }
         if(state._unsubBalanceRequests){ state._unsubBalanceRequests(); state._unsubBalanceRequests=null; }
         if(state._unsubTransactions){ state._unsubTransactions(); state._unsubTransactions=null; }
+        if(state._unsubMyOrders){ state._unsubMyOrders(); state._unsubMyOrders=null; }
+        state.myOrders = []; state.hasMyOrdersLoaded = false; state._myOrderStatus = null;
         if(state._unsubChat){ state._unsubChat(); state._unsubChat=null; }
         state.chatMessages = []; state.chatUnread = false; state.hasChatPolledOnce = false;
         render();
@@ -1402,10 +1485,13 @@ function bindEvents(){
         state.tab = el.dataset.tab;
         if(state.tab==='chat') state.chatUnread = false;
         render();
-        if(state.tab==='balance') refreshMyOrders();
         if(state.tab==='chat') scrollChatToBottom();
       }
       else if(action==='sendChat'){ await handleSendChat(el.dataset.employee); }
+      else if(action==='acceptOrder'){ await acceptOrder(el.dataset.id); }
+      else if(action==='rejectOrder'){
+        if(confirm('متأكد إنك عايز تلغي الطلب ده؟ لو الفلوس كانت اتخصمت هترجع لصاحبها.')) await rejectOrder(el.dataset.id);
+      }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
       else if(action==='substituteItem'){ await substituteOrderItem(el.dataset.id, Number(el.dataset.idx), el.dataset.newtype); }
       else if(action==='adjustQty'){ await adjustOrderItemQty(el.dataset.id, Number(el.dataset.idx), Number(el.dataset.delta)); }
@@ -1449,7 +1535,7 @@ function bindEvents(){
 async function afterLogin(){
   if(state.role==='employee' || state.role==='admin'){ state.balance = await getBalance(state.name); }
   render();
-  if(state.role==='employee' || state.role==='admin') refreshMyOrders();
+  if(state.role==='employee' || state.role==='admin'){ if(!state._unsubMyOrders) state._unsubMyOrders = listenMyOrders(state.name, onMyOrdersUpdate); }
   if(state.role==='employee' || state.role==='admin'){
     if(!state._unsubChat) state._unsubChat = listenMyChat(state.name, onMyChatUpdate);
   }
@@ -1688,17 +1774,14 @@ async function submitOrder(){
   const note = noteEl ? noteEl.value.trim() : '';
   const order = {
     id: 'order_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', ts: Date.now(), status: 'pending', note, ...ip.extra
+    name: state.name, items, total, paymentMethod: method, paymentConfirmed: method !== 'cash', paymentDeducted:false, ts: Date.now(), status: 'pending', note, ...ip.extra
   };
   try{
     await saveOrder(order);
-    if(method === 'balance'){
-      await addToBalance(state.name, -total, 'خصم طلب', `طلب #${order.id.slice(-5)}`);
-      state.balance = state.balance - total;
-    }
+    // ملحوظة: مفيش خصم من الرصيد هنا — الفلوس بتتخصم بس لما الشيف يقبل الطلب
     state.cart = {};
     state.snackCart = {};
-    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب إلى المطبخ');
+    toast(method==='cash' ? 'تم إرسال الطلب — الدفع كاش عند الاستلام' : method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب — بانتظار قبول الشيف');
     render();
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
@@ -1767,19 +1850,22 @@ function onKitchenChatUpdate(msgs){
   state.hasChatPolledOnce = true;
   if(state.kitchenUnlocked) render();
 }
-async function refreshMyOrders(){
-  const el = document.getElementById('myOrdersList');
-  if(!el || !firebaseReady) { if(el) el.innerHTML = `<div class="empty">ستظهر الطلبات هنا بعد إعداد Firebase</div>`; return; }
-  db.collection('orders').where('name','==',state.name).orderBy('ts','desc').limit(8).get().then(snap=>{
-    const mine = snap.docs.map(d=>d.data());
-    if(mine.length===0){ el.innerHTML = `<div class="empty">لم يتم تقديم أي طلب بعد</div>`; return; }
-    el.innerHTML = mine.map(o=>{
-      const itemsStr = o.items.map(i=>`${i.name} ×${i.qty}`).join('، ');
-      const time = new Date(o.ts).toLocaleString('ar-EG',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric'});
-      const label = o.kind==='drinks' ? 'مشروبات ☕' : fmt(o.total);
-      return `<div class="order-row"><div class="top"><span>${label}</span><span>${o.status==='done'?'✅ جاهز':'⏳ قيد التحضير'}</span></div><div class="items">${itemsStr}</div><div class="small">${time}</div></div>`;
-    }).join('');
-  }).catch(()=>{ el.innerHTML = `<div class="empty">تعذر تحميل الطلبات</div>`; });
+function onMyOrdersUpdate(orders){
+  if(state.hasMyOrdersLoaded && state._myOrderStatus){
+    orders.forEach(o=>{
+      const prev = state._myOrderStatus[o.id];
+      if(prev && prev !== o.status){
+        if(o.status==='accepted') toast('الشيف قبل طلبك، جاري التحضير ⏳');
+        else if(o.status==='done') toast('طلبك جاهز ✅');
+        else if(o.status==='cancelled') toast('اتلغى طلبك من الشيف ✕');
+      }
+    });
+  }
+  state._myOrderStatus = {};
+  orders.forEach(o=>{ state._myOrderStatus[o.id] = o.status; });
+  state.myOrders = orders;
+  state.hasMyOrdersLoaded = true;
+  if(state.tab==='balance') render();
 }
 function prepAlerts(){
   try{ if(window.Notification && Notification.permission==='default'){ Notification.requestPermission(); } }catch(e){}

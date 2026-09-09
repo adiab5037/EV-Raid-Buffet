@@ -72,24 +72,45 @@
     --shadow-pop:0 10px 26px -8px rgba(8,32,56,0.28);
   }
   *{box-sizing:border-box;}
+  html{
+    background:
+      radial-gradient(900px 900px at -10% 15%, rgba(201,162,75,0.16), transparent 55%),
+      radial-gradient(900px 900px at 110% 85%, rgba(11,63,107,0.14), transparent 55%),
+      linear-gradient(175deg, var(--bg-1), var(--bg-2) 70%);
+  }
   body{
     margin:0;
     font-family:'Tajawal',sans-serif;
     background:
       radial-gradient(1100px 480px at 50% -180px, rgba(201,162,75,0.12), transparent 60%),
-      linear-gradient(175deg, var(--bg-1), var(--bg-2) 70%);
+      transparent;
     color:var(--ink);
     min-height:100vh;
     display:flex;
     justify-content:center;
     letter-spacing:0.1px;
+    position:relative;
+    overflow-x:hidden;
   }
+  body::before, body::after{
+    content:'🍽';
+    position:fixed;
+    font-size:220px;
+    line-height:1;
+    opacity:0.05;
+    pointer-events:none;
+    z-index:0;
+    filter:blur(0.5px);
+  }
+  body::before{ top:6%; left:2%; transform:rotate(-18deg); content:'☕'; color:var(--gold-deep); }
+  body::after{ bottom:4%; right:2%; transform:rotate(14deg); content:'🍴'; color:var(--navy); }
   #app{
     width:100%;
     max-width:460px;
     min-height:100vh;
     padding:18px 16px 96px;
     position:relative;
+    z-index:1;
   }
   .balance-badge{
     position:absolute;
@@ -899,6 +920,9 @@ function orderScreen(){
     </div>`;
   }).join('');
   const cartCount = Object.keys(state.cart).length + Object.keys(state.snackCart).length;
+  const myOrdersHtml = state.myOrders.length
+    ? state.myOrders.map(o=>orderRow(o,false,false,true)).join('')
+    : (state.hasMyOrdersLoaded ? `<div class="empty">لم يتم تقديم أي طلب بعد</div>` : `<div class="empty">جارِ التحميل...</div>`);
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
@@ -915,7 +939,8 @@ function orderScreen(){
   <div class="cart-bar">
     <span>الإجمالي: ${fmt(total)}</span>
     <button class="btn-main btn-confirm" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
-  </div>`:''}`;
+  </div>`:''}
+  <div class="card"><h2>🧾 آخر طلباتي</h2><p class="small" style="margin-top:-6px;">هتلاقي هنا حالة كل طلب لحظة بلحظة</p><div id="myOrdersList">${myOrdersHtml}</div></div>`;
 }
 function allMenuItems(){ return [...MENU, ...state.customMenu].map(withOverride); }
 function allSnackItems(){ return [...SNACKS, ...state.customSnacks].map(withOverride); }
@@ -1079,16 +1104,12 @@ function balanceCardWithActions(){
   ${topupFormHtml}${withdrawFormHtml}`;
 }
 function balanceScreen(){
-  const myOrdersHtml = state.myOrders.length
-    ? state.myOrders.map(o=>orderRow(o,false)).join('')
-    : (state.hasMyOrdersLoaded ? `<div class="empty">لم يتم تقديم أي طلب بعد</div>` : `<div class="empty">جارِ التحميل...</div>`);
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
     <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
   </div>
-  ${balanceCardWithActions()}
-  <div class="card"><h2>🧾 آخر طلباتي</h2><p class="small" style="margin-top:-6px;">هتلاقي هنا حالة كل طلب لحظة بلحظة</p><div id="myOrdersList">${myOrdersHtml}</div></div>`;
+  ${balanceCardWithActions()}`;
 }
 function kitchenScreen(){
   const pending = state.orders.filter(o=>o.status==='pending' || o.status==='accepted');
@@ -1348,7 +1369,7 @@ function adminScreen(){
   <div class="card"><h2>💰 الأرصدة</h2>${balancesHtml}</div>
   <div class="card"><h2>📦 إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockManagementHtml()}</div>`;
 }
-function orderRow(o, isPending, isAdminView){
+function orderRow(o, isPending, isAdminView, isOwner){
   const itemsHtml = o.items.map((i, idx)=>{
     const qtyCtrl = isPending ? `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px;">
       <button class="btn-ghost" style="padding:1px 7px;font-size:11px;" data-action="adjustQty" data-id="${o.id}" data-idx="${idx}" data-delta="-1" title="قلّل بواحد">－</button>
@@ -1383,6 +1404,7 @@ function orderRow(o, isPending, isAdminView){
     : `<span style="color:var(--gold-deep);font-weight:700;">🆕 بانتظار القبول</span>`;
   const awaitingAccept = isPending && o.status==='pending';
   const accepted = isPending && o.status==='accepted';
+  const ownerCanCancel = isOwner && o.status==='pending';
   return `
   <div class="order-row ${isPending && !state.seenOrderIds.has(o.id) ? 'new':''}" style="border-right-color:${statusColor};">
     <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
@@ -1391,12 +1413,13 @@ function orderRow(o, isPending, isAdminView){
     ${paymentBadge}
     ${noteHtml}
     ${instapayInfo}
-    <div class="actions">
+    ${(awaitingAccept||accepted||ownerCanCancel||needsPaymentConfirm)? `<div class="actions">
       ${awaitingAccept? `<button class="btn-main btn-confirm" style="width:auto;margin:0;padding:8px 14px;" data-action="acceptOrder" data-id="${o.id}">قبول الطلب ✓</button>`:''}
       ${(awaitingAccept||accepted)? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" data-action="rejectOrder" data-id="${o.id}">إلغاء الطلب ✕</button>`:''}
       ${accepted? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
       ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
-    </div>
+      ${ownerCanCancel? `<button class="btn-ghost" style="color:var(--danger);border-color:var(--danger);" data-action="cancelMyOrder" data-id="${o.id}">إلغاء الطلب ✕</button>`:''}
+    </div>`:''}
   </div>`;
 }
 function renderTabs(){
@@ -1491,6 +1514,9 @@ function bindEvents(){
       else if(action==='acceptOrder'){ await acceptOrder(el.dataset.id); }
       else if(action==='rejectOrder'){
         if(confirm('متأكد إنك عايز تلغي الطلب ده؟ لو الفلوس كانت اتخصمت هترجع لصاحبها.')) await rejectOrder(el.dataset.id);
+      }
+      else if(action==='cancelMyOrder'){
+        if(confirm('متأكد إنك عايز تلغي طلبك؟')) await cancelMyOrder(el.dataset.id);
       }
       else if(action==='markDone'){ await markOrderDone(el.dataset.id); }
       else if(action==='substituteItem'){ await substituteOrderItem(el.dataset.id, Number(el.dataset.idx), el.dataset.newtype); }
@@ -1865,7 +1891,20 @@ function onMyOrdersUpdate(orders){
   orders.forEach(o=>{ state._myOrderStatus[o.id] = o.status; });
   state.myOrders = orders;
   state.hasMyOrdersLoaded = true;
-  if(state.tab==='balance') render();
+  if(state.tab==='order') render();
+}
+// الموظف يقدر يلغي طلبه بنفسه طول ما لسه بانتظار قبول الشيف (قبل ما يتخصم أي فلوس)
+async function cancelMyOrder(id){
+  if(!firebaseReady) return;
+  try{
+    const ref = db.collection('orders').doc(id);
+    const doc = await ref.get();
+    if(!doc.exists) return;
+    const order = doc.data();
+    if(order.status !== 'pending'){ toast('الطلب دخل التحضير بالفعل، محتاج تتواصل مع الشيف'); return; }
+    await ref.update({status:'cancelled'});
+    toast('تم إلغاء طلبك');
+  }catch(e){ toast('حدث خطأ أثناء إلغاء الطلب'); }
 }
 function prepAlerts(){
   try{ if(window.Notification && Notification.permission==='default'){ Notification.requestPermission(); } }catch(e){}

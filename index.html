@@ -792,9 +792,12 @@ function listenOrders(cb){
 // طلبات الموظف نفسه — لايف عشان لما الطلب يوصل للشيف أو يتقبل/يتم تجهيزه، الموظف يشوف الحالة تتحدث فورًا
 function listenMyOrders(name, cb){
   if(!firebaseReady) return ()=>{};
-  return db.collection('orders').where('name','==',name).orderBy('ts','desc').limit(8).onSnapshot(snap=>{
-    cb(snap.docs.map(d=>d.data()));
-  });
+  // ملحوظة: بنستخدم استعلام بسيط (orderBy بس من غير where) وبنفلتر عندنا في الجهاز،
+  // عشان نتجنب الحاجة لـ composite index في Firestore، اللي لو مش متعمل بيوقف عرض الطلب خالص.
+  return db.collection('orders').orderBy('ts','desc').onSnapshot(snap=>{
+    const mine = snap.docs.map(d=>d.data()).filter(o=>o.name===name).slice(0,20);
+    cb(mine);
+  }, err=>{ console.error('listenMyOrders error', err); });
 }
 // شات المراسلة مع ضياء (الشيف) — كل موظف له خيط رسائل واحد معاه، وضياء بيشوف كل الخيوط
 async function sendChatMsg(employee, sender, text){

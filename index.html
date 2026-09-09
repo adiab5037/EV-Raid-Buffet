@@ -546,6 +546,8 @@ let state = {
   kitchenTxDate: null,
   hasPolledOnce: false,
   myOrders: [], hasMyOrdersLoaded: false, _myOrderStatus: null,
+  _inFlightOrders: new Set(),
+  _submittingOrder: false, _submittingDrinkOrder: false, _submittingBalanceReq: false,
   _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null, _unsubMyOrders: null,
   _audioCtx: null,
 };
@@ -729,12 +731,21 @@ function listenMyBalanceRequests(name, cb){
 }
 async function approveBalanceRequest(id){
   if(!firebaseReady) return;
-  const ref = db.collection('balanceRequests').doc(id);
-  const doc = await ref.get();
-  if(!doc.exists || doc.data().status !== 'pending') return;
-  const req = doc.data();
-  await ref.update({status:'approved'});
-  await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount, req.kind==='charge' ? 'شحن رصيد' : 'سحب رصيد', 'موافقة على طلب ' + (req.kind==='charge'?'شحن':'سحب'));
+  if(state._inFlightOrders.has('breq:'+id)) return;
+  state._inFlightOrders.add('breq:'+id);
+  try{
+    const ref = db.collection('balanceRequests').doc(id);
+    let acted = false, req = null;
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists || doc.data().status !== 'pending') return; // اتوافق عليه بالفعل — تجاهل
+      req = doc.data();
+      acted = true;
+      t.update(ref, {status:'approved'});
+    });
+    if(!acted) return;
+    await addToBalance(req.name, req.kind==='charge' ? req.amount : -req.amount, req.kind==='charge' ? 'شحن رصيد' : 'سحب رصيد', 'موافقة على طلب ' + (req.kind==='charge'?'شحن':'سحب'));
+  }finally{ state._inFlightOrders.delete('breq:'+id); }
 }
 async function saveOrder(order){
   if(!firebaseReady) return;
@@ -742,45 +753,79 @@ async function saveOrder(order){
 }
 async function markOrderDone(id){
   if(!firebaseReady) return;
-  await db.collection('orders').doc(id).update({status:'done'});
+  if(state._inFlightOrders.has(id)) return;
+  state._inFlightOrders.add(id);
+  try{ await db.collection('orders').doc(id).update({status:'done'}); }
+  finally{ state._inFlightOrders.delete(id); }
 }
 async function confirmPayment(id){
   if(!firebaseReady) return;
-  await db.collection('orders').doc(id).update({paymentConfirmed:true});
+  if(state._inFlightOrders.has(id)) return;
+  state._inFlightOrders.add(id);
+  try{ await db.collection('orders').doc(id).update({paymentConfirmed:true}); }
+  finally{ state._inFlightOrders.delete(id); }
 }
 // الشيف بيقبل الطلب — هنا بس الفلوس بتتخصم فعليًا (لو الدفع من الرصيد)
+// بنستخدم transaction عشان لو الشيف دوس أكتر من مرة بسرعة (أو حصل تأخير في الشبكة)
+// يتضمن إن الخصم يحصل مرة واحدة بس، مش أكتر.
 async function acceptOrder(id){
   if(!firebaseReady) return;
+  if(state._inFlightOrders.has(id)) return;
+  state._inFlightOrders.add(id);
   try{
     const ref = db.collection('orders').doc(id);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    const order = doc.data();
-    if(order.status !== 'pending') return;
-    await ref.update({status:'accepted'});
-    if(order.paymentMethod === 'balance' && !order.paymentDeducted){
-      await addToBalance(order.name, -(order.total||0), 'خصم طلب', `تأكيد الشيف — طلب #${id.slice(-5)}`);
-      await ref.update({paymentDeducted:true});
+    let acted = false, shouldDeduct = false, orderData = null;
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists) return;
+      const order = doc.data();
+      if(order.status !== 'pending') return; // اتقبل بالفعل (من نقرة تانية أو جهاز تاني) — تجاهل
+      acted = true;
+      orderData = order;
+      const updates = {status:'accepted'};
+      if(order.paymentMethod === 'balance' && !order.paymentDeducted){
+        shouldDeduct = true;
+        updates.paymentDeducted = true;
+      }
+      t.update(ref, updates);
+    });
+    if(!acted) return;
+    if(shouldDeduct){
+      await addToBalance(orderData.name, -(orderData.total||0), 'خصم طلب', `تأكيد الشيف — طلب #${id.slice(-5)}`);
     }
     toast('تم قبول الطلب');
   }catch(e){ toast('حدث خطأ أثناء قبول الطلب'); }
+  finally{ state._inFlightOrders.delete(id); }
 }
 // الشيف بيرفض/يلغي الطلب — لو الفلوس كانت اتخصمت بالفعل بترجع لصاحبها تلقائيًا
 async function rejectOrder(id){
   if(!firebaseReady) return;
+  if(state._inFlightOrders.has(id)) return;
+  state._inFlightOrders.add(id);
   try{
     const ref = db.collection('orders').doc(id);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    const order = doc.data();
-    if(order.status === 'done' || order.status === 'cancelled') return;
-    await ref.update({status:'cancelled'});
-    if(order.paymentMethod === 'balance' && order.paymentDeducted){
-      await addToBalance(order.name, (order.total||0), 'استرداد', `إلغاء الشيف للطلب #${id.slice(-5)}`);
-      await ref.update({paymentDeducted:false});
+    let acted = false, shouldRefund = false, orderData = null;
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists) return;
+      const order = doc.data();
+      if(order.status === 'done' || order.status === 'cancelled') return; // اتلغى/اتخلص بالفعل — تجاهل
+      acted = true;
+      orderData = order;
+      const updates = {status:'cancelled'};
+      if(order.paymentMethod === 'balance' && order.paymentDeducted){
+        shouldRefund = true;
+        updates.paymentDeducted = false;
+      }
+      t.update(ref, updates);
+    });
+    if(!acted) return;
+    if(shouldRefund){
+      await addToBalance(orderData.name, (orderData.total||0), 'استرداد', `إلغاء الشيف للطلب #${id.slice(-5)}`);
     }
-    toast('تم إلغاء الطلب' + (order.paymentMethod==='balance' && order.paymentDeducted ? '، وترجعت الفلوس لصاحب الطلب' : ''));
+    toast('تم إلغاء الطلب' + (shouldRefund ? '، وترجعت الفلوس لصاحب الطلب' : ''));
   }catch(e){ toast('حدث خطأ أثناء إلغاء الطلب'); }
+  finally{ state._inFlightOrders.delete(id); }
 }
 
 function listenOrders(cb){
@@ -1656,6 +1701,7 @@ async function handleSavePrice(id, mode){
   }catch(e){ toast('حدث خطأ أثناء الحفظ'); }
 }
 async function handleSubmitBalanceRequest(){
+  if(state._submittingBalanceReq) return;
   const kindBtn = document.querySelector('[data-action="submitBalanceRequest"]');
   const kind = kindBtn ? kindBtn.dataset.kind : state.topupMode;
   const amountEl = document.getElementById('balanceReqAmount');
@@ -1676,83 +1722,115 @@ async function handleSubmitBalanceRequest(){
     id: 'breq_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     name: state.name, kind, amount, phone, screenshot, status:'pending', ts: Date.now()
   };
+  state._submittingBalanceReq = true;
   try{
     await saveBalanceRequest(req);
     state.topupMode = null;
     toast('تم إرسال الطلب، بانتظار المراجعة');
     render();
   }catch(e){ toast('حدث خطأ أثناء إرسال الطلب'); }
+  finally{ state._submittingBalanceReq = false; }
 }
 async function substituteOrderItem(orderId, idx, newType){
   if(!firebaseReady) return;
+  const key = 'edit:'+orderId;
+  if(state._inFlightOrders.has(key)) return;
+  state._inFlightOrders.add(key);
   try{
     const ref = db.collection('orders').doc(orderId);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    const order = doc.data();
-    const item = order.items[idx];
-    if(!item || !item.type) return;
-    const menuIt = allMenuItems().find(m=>m.name===item.name);
-    if(!menuIt) return;
-    const newPrice = newType==='baladi' ? menuIt.baladi : menuIt.fransawi;
-    if(newPrice==null){ toast('الصنف مفيهوش السعر ده'); return; }
-    const oldLineTotal = item.price * item.qty;
-    const newLineTotal = newPrice * item.qty;
-    const delta = newLineTotal - oldLineTotal;
-    const newItems = order.items.slice();
-    newItems[idx] = {...item, type:newType, price:newPrice};
-    const newTotal = (order.total||0) + delta;
-    await ref.update({items:newItems, total:newTotal});
+    let delta = 0, itemName = '', order = null, acted = false, noPrice = false;
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists) return;
+      order = doc.data();
+      const item = order.items[idx];
+      if(!item || !item.type) return;
+      const menuIt = allMenuItems().find(m=>m.name===item.name);
+      if(!menuIt) return;
+      const newPrice = newType==='baladi' ? menuIt.baladi : menuIt.fransawi;
+      if(newPrice==null){ noPrice = true; return; }
+      itemName = item.name;
+      const oldLineTotal = item.price * item.qty;
+      const newLineTotal = newPrice * item.qty;
+      delta = newLineTotal - oldLineTotal;
+      const newItems = order.items.slice();
+      newItems[idx] = {...item, type:newType, price:newPrice};
+      const newTotal = (order.total||0) + delta;
+      t.update(ref, {items:newItems, total:newTotal});
+      acted = true;
+    });
+    if(noPrice){ toast('الصنف مفيهوش السعر ده'); return; }
+    if(!acted){ return; }
     if(order.paymentMethod === 'balance' && delta !== 0){
-      await addToBalance(order.name, -delta, delta>0?'فرق استبدال صنف (خصم)':'فرق استبدال صنف (استرداد)', `استبدال ${item.name} إلى ${newType==='baladi'?'بلدي':'فرنساوي'} — طلب #${orderId.slice(-5)}`);
+      await addToBalance(order.name, -delta, delta>0?'فرق استبدال صنف (خصم)':'فرق استبدال صنف (استرداد)', `استبدال ${itemName} إلى ${newType==='baladi'?'بلدي':'فرنساوي'} — طلب #${orderId.slice(-5)}`);
     }
     toast('تم الاستبدال وتحديث السعر');
   }catch(e){ toast('حدث خطأ أثناء الاستبدال'); }
+  finally{ state._inFlightOrders.delete(key); }
 }
 // تعديل كمية صنف داخل طلب لسه في التحضير — الفرق بيتضاف/يترد على رصيد الموظف تلقائيًا
+// (transaction عشان لو اتضغط بسرعة/أكتر من مرة، الحساب يفضل مظبوط ومايتكررش)
 async function adjustOrderItemQty(orderId, idx, delta){
   if(!firebaseReady) return;
+  const key = 'edit:'+orderId;
+  if(state._inFlightOrders.has(key)) return;
+  state._inFlightOrders.add(key);
   try{
     const ref = db.collection('orders').doc(orderId);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    const order = doc.data();
-    const item = order.items[idx];
-    if(!item) return;
-    const newQty = item.qty + delta;
-    if(newQty < 1){ toast('لو عايز تشيل الصنف بالكامل استخدم زرار ✕'); return; }
-    const oldLineTotal = (item.price||0) * item.qty;
-    const newLineTotal = (item.price||0) * newQty;
-    const priceDelta = newLineTotal - oldLineTotal;
-    const newItems = order.items.slice();
-    newItems[idx] = {...item, qty:newQty};
-    const newTotal = Math.max(0, (order.total||0) + priceDelta);
-    await ref.update({items:newItems, total:newTotal});
+    let priceDelta = 0, order = null, tooLow = false;
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists) return;
+      order = doc.data();
+      const item = order.items[idx];
+      if(!item) return;
+      const newQty = item.qty + delta;
+      if(newQty < 1){ tooLow = true; return; }
+      const oldLineTotal = (item.price||0) * item.qty;
+      const newLineTotal = (item.price||0) * newQty;
+      priceDelta = newLineTotal - oldLineTotal;
+      const newItems = order.items.slice();
+      newItems[idx] = {...item, qty:newQty};
+      const newTotal = Math.max(0, (order.total||0) + priceDelta);
+      t.update(ref, {items:newItems, total:newTotal});
+    });
+    if(tooLow){ toast('لو عايز تشيل الصنف بالكامل استخدم زرار ✕'); return; }
+    if(!order) return;
     if(order.paymentMethod === 'balance' && priceDelta !== 0){
-      await addToBalance(order.name, -priceDelta, priceDelta>0?'زيادة كمية (خصم)':'تقليل كمية (استرداد)', `${item.name} — طلب #${orderId.slice(-5)}`);
+      await addToBalance(order.name, -priceDelta, priceDelta>0?'زيادة كمية (خصم)':'تقليل كمية (استرداد)', `طلب #${orderId.slice(-5)}`);
     }
     toast(delta>0? 'تم زيادة الكمية' : 'تم تقليل الكمية، والفرق اتضاف لرصيد الموظف');
   }catch(e){ toast('حدث خطأ أثناء تعديل الكمية'); }
+  finally{ state._inFlightOrders.delete(key); }
 }
 // حذف صنف بالكامل من طلب لسه في التحضير — قيمته بترجع لرصيد الموظف لو كان دافع من رصيده
 async function removeOrderItem(orderId, idx){
   if(!firebaseReady) return;
+  const key = 'edit:'+orderId;
+  if(state._inFlightOrders.has(key)) return;
+  state._inFlightOrders.add(key);
   try{
     const ref = db.collection('orders').doc(orderId);
-    const doc = await ref.get();
-    if(!doc.exists) return;
-    const order = doc.data();
-    const item = order.items[idx];
-    if(!item) return;
-    const lineTotal = (item.price||0) * item.qty;
-    const newItems = order.items.filter((_,i)=>i!==idx);
-    const newTotal = Math.max(0, (order.total||0) - lineTotal);
-    await ref.update({items:newItems, total:newTotal});
+    let lineTotal = 0, order = null, itemName = '';
+    await db.runTransaction(async (t)=>{
+      const doc = await t.get(ref);
+      if(!doc.exists) return;
+      order = doc.data();
+      const item = order.items[idx];
+      if(!item) return;
+      itemName = item.name;
+      lineTotal = (item.price||0) * item.qty;
+      const newItems = order.items.filter((_,i)=>i!==idx);
+      const newTotal = Math.max(0, (order.total||0) - lineTotal);
+      t.update(ref, {items:newItems, total:newTotal});
+    });
+    if(!order) return;
     if(order.paymentMethod === 'balance' && lineTotal !== 0){
-      await addToBalance(order.name, lineTotal, 'حذف صنف (استرداد)', `${item.name} — طلب #${orderId.slice(-5)}`);
+      await addToBalance(order.name, lineTotal, 'حذف صنف (استرداد)', `${itemName} — طلب #${orderId.slice(-5)}`);
     }
     toast('تم حذف الصنف من الطلب، والقيمة اتردت لرصيد الموظف');
   }catch(e){ toast('حدث خطأ أثناء الحذف'); }
+  finally{ state._inFlightOrders.delete(key); }
 }
 async function handleAddMenuItem(){
   const catEl = document.getElementById('newItemCat');
@@ -1782,6 +1860,8 @@ async function handleAddMenuItem(){
 async function submitOrder(){
   if(Object.keys(state.cart).length===0 && Object.keys(state.snackCart).length===0) return;
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  if(state._submittingOrder) return;
+  state._submittingOrder = true;
   const items = []; let total = 0;
   for(const id in state.cart){
     const it = allMenuItems().find(m=>m.id===id);
@@ -1814,10 +1894,13 @@ async function submitOrder(){
     render();
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+  finally{ state._submittingOrder = false; }
 }
 async function submitDrinkOrder(){
   if(Object.keys(state.drinkCart).length===0) return;
   if(!firebaseReady){ toast('يجب إعداد بيانات Firebase أولًا'); return; }
+  if(state._submittingDrinkOrder) return;
+  state._submittingDrinkOrder = true;
   const items = [];
   for(const id in state.drinkCart){
     const d = allDrinksItems().find(m=>m.id===id);
@@ -1836,6 +1919,7 @@ async function submitDrinkOrder(){
     render();
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
+  finally{ state._submittingDrinkOrder = false; }
 }
 async function handleSendChat(employeeDataset){
   const isKitchenReply = !!employeeDataset;
@@ -1899,6 +1983,8 @@ function onMyOrdersUpdate(orders){
 // الموظف يقدر يلغي طلبه بنفسه طول ما لسه بانتظار قبول الشيف (قبل ما يتخصم أي فلوس)
 async function cancelMyOrder(id){
   if(!firebaseReady) return;
+  if(state._inFlightOrders.has(id)) return;
+  state._inFlightOrders.add(id);
   try{
     const ref = db.collection('orders').doc(id);
     const doc = await ref.get();
@@ -1908,6 +1994,7 @@ async function cancelMyOrder(id){
     await ref.update({status:'cancelled'});
     toast('تم إلغاء طلبك');
   }catch(e){ toast('حدث خطأ أثناء إلغاء الطلب'); }
+  finally{ state._inFlightOrders.delete(id); }
 }
 function prepAlerts(){
   try{ if(window.Notification && Notification.permission==='default'){ Notification.requestPermission(); } }catch(e){}

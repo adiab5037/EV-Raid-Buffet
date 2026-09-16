@@ -427,6 +427,52 @@
   table.balances{width:100%;border-collapse:collapse;font-size:13px;}
   table.balances th,table.balances td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;}
   table.balances th{color:var(--navy);}
+  /* أي جدول عريض يبقى قابل للسحب أفقيًا بدل ما يتقص على الموبايل */
+  .table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .table-wrap table{min-width:100%;}
+
+  /* ---------- كروت سجل كل موظف (بديل الجدول العريض) ---------- */
+  .emp-card{
+    border:1px solid var(--line); border-radius:12px; background:var(--card-2);
+    margin-bottom:8px; overflow:hidden;
+  }
+  .emp-card > summary{
+    list-style:none; cursor:pointer; padding:10px 12px; display:block;
+  }
+  .emp-card > summary::-webkit-details-marker{display:none;}
+  .emp-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .emp-name{font-weight:800;font-size:14px;color:var(--navy);display:flex;align-items:center;gap:6px;min-width:0;}
+  .emp-name .rank{
+    flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;
+    font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800;
+  }
+  .emp-name .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .emp-total{font-weight:900;font-size:14px;color:var(--green-dark);white-space:nowrap;}
+  .emp-stats{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+  .emp-stats span{
+    background:#fff;border:1px solid var(--line);border-radius:20px;
+    padding:3px 9px;font-size:11px;color:var(--muted);white-space:nowrap;
+  }
+  .emp-stats span b{color:var(--navy);font-weight:800;}
+  .emp-hint{font-size:10.5px;color:var(--muted);margin-top:6px;}
+  .emp-card[open] .emp-hint{display:none;}
+  .emp-items{padding:0 12px 12px;display:flex;flex-wrap:wrap;gap:6px;}
+  .emp-items .chip{
+    background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:4px 9px;font-size:11.5px;
+  }
+  .emp-items .chip b{color:var(--green-dark);}
+
+  /* ---------- سجل الشهور ---------- */
+  .month-row{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:10px 12px;border:1px solid var(--line);border-radius:12px;
+    background:var(--card-2);margin-bottom:7px;
+  }
+  .month-row.current{border-color:var(--green);background:rgba(122,193,66,0.08);}
+  .month-row .m-name{font-weight:800;font-size:13px;color:var(--navy);}
+  .month-row .m-sub{font-size:10.5px;color:var(--muted);margin-top:3px;}
+  .month-row .m-amt{font-weight:900;font-size:15px;color:var(--green-dark);white-space:nowrap;}
 
   /* ---------- لمسات شكلية إضافية ---------- */
   @keyframes cardIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
@@ -610,6 +656,12 @@ let state = {
   hasPolledOnce: false,
   _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null, _unsubMyBalance: null,
   _audioCtx: null,
+};
+
+// أسماء الموظفين اللي كارتهم مفتوح في "سجل كل موظف" — عشان ميتقفلش لوحده كل ما الشاشة تتحدّث
+const openEmpCards = new Set();
+window.__toggleEmp = function(name, isOpen){
+  if(isOpen) openEmpCards.add(name); else openEmpCards.delete(name);
 };
 
 function toast(msg){
@@ -1385,6 +1437,34 @@ function adminScreen(){
       <div class="balance-box mini"><div class="small">💳 من الرصيد</div><div class="amt ok">${fmt(todayByMethod.balance)}</div></div>
       <div class="balance-box mini"><div class="small">📲 إنستاباي</div><div class="amt ok">${fmt(todayByMethod.instapay)}</div></div>
     </div>`;
+  // سجل المبيعات شهر بشهر: كل شهر بإجماليه وعدد طلباته وتفصيل وسيلة الدفع
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const byMonth = {};
+  paidOrders.forEach(o=>{
+    const d = new Date(o.ts);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(!byMonth[key]) byMonth[key] = {
+      total:0, count:0, balance:0, instapay:0,
+      label: d.toLocaleDateString('ar-EG', {month:'long', year:'numeric'}),
+      people: new Set()
+    };
+    byMonth[key].total += o.total;
+    byMonth[key].count += 1;
+    byMonth[key][o.paymentMethod] = (byMonth[key][o.paymentMethod]||0) + o.total;
+    byMonth[key].people.add(o.name);
+  });
+  const monthKeys = Object.keys(byMonth).sort().reverse();
+  const monthlyHtml = monthKeys.length? monthKeys.map(k=>{
+    const m = byMonth[k];
+    return `
+    <div class="month-row ${k===currentMonthKey?'current':''}">
+      <div>
+        <div class="m-name">${m.label}${k===currentMonthKey?' <span style="font-size:10px;color:var(--green-dark);">(الشهر الحالي)</span>':''}</div>
+        <div class="m-sub">${m.count} طلب · ${m.people.size} موظف · 💳 ${fmt(m.balance)} · 📲 ${fmt(m.instapay)}</div>
+      </div>
+      <div class="m-amt">${fmt(m.total)}</div>
+    </div>`;
+  }).join('') : `<div class="empty">لا توجد مبيعات مسجلة بعد</div>`;
   // طلبات شحن/سحب رصيد محتاجة موافقة
   const pendingBalanceReqs = state.balanceRequests||[];
   const balanceReqsHtml = pendingBalanceReqs.length? pendingBalanceReqs.map(r=>`
@@ -1407,22 +1487,31 @@ function adminScreen(){
     });
   });
   const employeeNames = Object.keys(byEmployee).sort((a,b)=>byEmployee[b].total-byEmployee[a].total);
-  const employeeLedgerHtml = employeeNames.length? `
-    <table class="balances">
-      <tr><th>الاسم</th><th>عدد الطلبات</th><th>النهاردة</th><th>${currentMonthLabel}</th><th>كل الوقت</th><th>الأصناف</th></tr>
-      ${employeeNames.map(name=>{
-        const e = byEmployee[name];
-        const itemsStr = Object.keys(e.items).map(n=>`${n} ×${e.items[n]}`).join('، ');
-        return `<tr>
-          <td>${name}</td>
-          <td>${e.count}</td>
-          <td style="font-weight:800;">${fmt(e.today)}</td>
-          <td style="font-weight:800;">${fmt(e.month)}</td>
-          <td style="font-weight:800;">${fmt(e.total)}</td>
-          <td class="small">${itemsStr}</td>
-        </tr>`;
-      }).join('')}
-    </table>` : `<div class="empty">لا يوجد سجل طلبات مدفوعة بعد</div>`;
+  const employeeLedgerHtml = employeeNames.length? employeeNames.map((name, idx)=>{
+    const e = byEmployee[name];
+    const itemNames = Object.keys(e.items).sort((a,b)=>e.items[b]-e.items[a]);
+    const itemsHtml = itemNames.length
+      ? itemNames.map(n=>`<span class="chip">${escapeHtml(n)} <b>×${e.items[n]}</b></span>`).join('')
+      : `<span class="chip">لا توجد أصناف</span>`;
+    const safeName = escapeHtml(name);
+    const attrName = String(name).replace(/"/g,'&quot;').replace(/'/g,"\\'");
+    return `
+    <details class="emp-card" ${openEmpCards.has(name)?'open':''} ontoggle="window.__toggleEmp('${attrName}', this.open)">
+      <summary>
+        <div class="emp-top">
+          <div class="emp-name"><span class="rank">${idx+1}</span><span class="nm">${safeName}</span></div>
+          <div class="emp-total">${fmt(e.total)}</div>
+        </div>
+        <div class="emp-stats">
+          <span>النهاردة <b>${fmt(e.today)}</b></span>
+          <span>${currentMonthLabel} <b>${fmt(e.month)}</b></span>
+          <span>الطلبات <b>${e.count}</b></span>
+        </div>
+        <div class="emp-hint">▾ اضغط عشان تشوف الأصناف اللي طلبها</div>
+      </summary>
+      <div class="emp-items">${itemsHtml}</div>
+    </details>`;
+  }).join('') : `<div class="empty">لا يوجد سجل طلبات مدفوعة بعد</div>`;
   return `
   <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
     <div><div class="small">لوحة التحكم</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
@@ -1431,7 +1520,8 @@ function adminScreen(){
   ${balanceCardWithActions()}
   <div class="card"><h2>💱 طلبات شحن/سحب الرصيد</h2><p class="small" style="margin-top:-6px;">راجع وأكّد طلبات الموظفين لشحن أو سحب رصيدهم</p>${balanceReqsHtml}</div>
   <div class="card"><h2>📊 إجمالي المبيعات</h2>${salesHtml}</div>
-  <div class="card"><h2>👤 سجل كل موظف</h2><p class="small" style="margin-top:-6px;">إجمالي كل حد وإيه اللي طلبه (الأصناف المدفوعة بس)</p>${employeeLedgerHtml}</div>
+  <div class="card"><h2>🗓️ سجل المبيعات شهر بشهر</h2><p class="small" style="margin-top:-6px;">إجمالي كل شهر من أول تشغيل التطبيق، الأحدث أولًا</p>${monthlyHtml}</div>
+  <div class="card"><h2>👤 سجل كل موظف</h2><p class="small" style="margin-top:-6px;">إجمالي كل حد وإيه اللي طلبه — اضغط على أي اسم يفتحلك الأصناف</p>${employeeLedgerHtml}</div>
   <div class="card"><h2>🔔 الطلبات الجديدة</h2>${ordersHtml}</div>
   <div class="card"><h2>📜 سجل كل الطلبات</h2><p class="small" style="margin-top:-6px;">آخر 60 طلب، الأحدث أولًا</p>${historyHtml}</div>
   <div class="card"><h2>💰 الأرصدة</h2>${balancesHtml}</div>

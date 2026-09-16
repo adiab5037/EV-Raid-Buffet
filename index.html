@@ -961,6 +961,9 @@ function render(){
     else if(state.tab === 'admin' && state.role==='admin') c.innerHTML = adminScreen();
     else c.innerHTML = orderScreen();
   }
+  else if(state.role === 'kitchen'){
+    c.innerHTML = (state.tab === 'admin') ? adminScreen() : kitchenScreen();
+  }
   else { c.innerHTML = kitchenScreen(); }
   renderBalanceBadge();
   renderTabs();
@@ -1400,17 +1403,19 @@ function stockManagementHtml(){
   return `${stockHtml}${addItemFormHtml}`;
 }
 function adminScreen(){
+  // الشيف بيشوف نفس اللوحة دي بصلاحية كاملة، الأدمن بيشوفها للمتابعة بس (بدون أزرار تنفيذ)
+  const readOnly = state.role === 'admin';
   const active = state.orders.filter(o=>o.status==='pending' || o.status==='confirmed');
-  const ordersHtml = active.length? active.map(o=>orderRow(o,true)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
-  const historyHtml = state.orders.length? state.orders.slice(0,60).map(o=>orderRow(o,true)).join('') : `<div class="empty">لا يوجد سجل طلبات بعد</div>`;
+  const ordersHtml = active.length? active.map(o=>orderRow(o,true,readOnly)).join('') : `<div class="empty">لا توجد طلبات حاليًا</div>`;
+  const historyHtml = state.orders.length? state.orders.slice(0,60).map(o=>orderRow(o,true,readOnly)).join('') : `<div class="empty">لا يوجد سجل طلبات بعد</div>`;
   const balancesHtml = state.balances.length? `
     <table class="balances">
-      <tr><th>الاسم</th><th>الرصيد</th><th></th></tr>
+      <tr><th>الاسم</th><th>الرصيد</th>${readOnly?'':'<th></th>'}</tr>
       ${state.balances.map(b=>`
         <tr>
           <td>${b.name}</td>
           <td style="color:${b.value<0?'#c53030':'var(--green-dark)'};font-weight:800;">${fmt(b.value)}</td>
-          <td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>
+          ${readOnly?'':`<td><button class="btn-ghost" style="padding:5px 8px;font-size:11px;" data-action="topup" data-name="${b.name}">تسجيل دفعة</button></td>`}
         </tr>`).join('')}
     </table>` : `<div class="empty">لا توجد أرصدة مسجلة بعد</div>`;
   // إجمالي المبيعات: بس الأصناف اللي بفلوس (مش المشروبات الفري) — إجمالي / اليوم / الشهر
@@ -1465,14 +1470,16 @@ function adminScreen(){
       <div class="m-amt">${fmt(m.total)}</div>
     </div>`;
   }).join('') : `<div class="empty">لا توجد مبيعات مسجلة بعد</div>`;
-  // طلبات شحن/سحب رصيد محتاجة موافقة
+  // طلبات شحن/سحب رصيد — الشيف يقدر يقبلها من هنا كمان، الأدمن يشوفها للمتابعة بس
   const pendingBalanceReqs = state.balanceRequests||[];
   const balanceReqsHtml = pendingBalanceReqs.length? pendingBalanceReqs.map(r=>`
     <div class="order-row">
       <div class="top"><span>${r.name}</span><span>${r.kind==='charge'?'شحن':'سحب'} ${fmt(r.amount)}</span></div>
       <div class="small">${r.kind==='charge'?'حوّل من':'يستلم على'}: ${r.phone}</div>
       ${r.screenshot? `<img src="${r.screenshot}" style="max-width:120px;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />`:''}
-      <div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>
+      ${readOnly
+        ? `<div class="small" style="margin-top:6px;color:var(--muted);">⏳ في انتظار موافقة الشيف</div>`
+        : `<div class="actions"><button class="btn-ghost" data-action="approveBalanceRequest" data-id="${r.id}">قبول الطلب ✓</button></div>`}
     </div>`).join('') : `<div class="empty">لا توجد طلبات رصيد معلّقة</div>`;
   // سجل كل موظف: عدد الطلبات، إجمالي المبلغ (النهاردة/الشهر/كل الوقت)، والأصناف اللي طلبها
   const byEmployee = {};
@@ -1527,8 +1534,8 @@ function adminScreen(){
   <div class="card"><h2>💰 الأرصدة</h2>${balancesHtml}</div>
   <div class="card"><h2>📦 إدارة المخزون والأصناف</h2><p class="small" style="margin-top:-6px;">أوقف أي صنف عشان محدش يقدر يطلبه، أو ضيف صنف جديد</p>${stockManagementHtml()}</div>`;
 }
-function orderRow(o, isAdminView){
-  const canEdit = o.status === 'confirmed';
+function orderRow(o, isAdminView, readOnly){
+  const canEdit = o.status === 'confirmed' && !readOnly;
   const isNewPending = o.status === 'pending';
   const itemsHtml = o.items.map((i, idx)=>{
     const qtyCtrl = canEdit ? `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px;">
@@ -1566,6 +1573,13 @@ function orderRow(o, isAdminView){
     cancelled: `<span class="status-chip" style="background:rgba(197,48,48,0.10);color:#c53030;">❌ ملغي</span>`,
   };
   const statusBadge = statusMap[o.status] || statusMap.pending;
+  const actionsHtml = readOnly ? '' : `
+    <div class="actions">
+      ${isNewPending? `<button class="btn-main btn-confirm" style="width:auto;margin:0;padding:8px 14px;font-size:12.5px;" data-action="confirmKitchenOrder" data-id="${o.id}">✅ تأكيد الطلب</button>`:''}
+      ${(isNewPending||canEdit)? `<button class="btn-ghost" style="color:#c53030;border-color:#c53030;" data-action="rejectOrder" data-id="${o.id}">${isNewPending? '❌ رفض الطلب':'❌ إلغاء الطلب'}</button>`:''}
+      ${canEdit? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
+      ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
+    </div>`;
   return `
   <div class="order-row ${isNewPending && !state.seenOrderIds.has(o.id) ? 'new':''} ${o.status==='cancelled'? 'cancelled':''} ${isStale?'stale':''}">
     <div class="top"><span>${o.name} ${isDrinks? '☕':''}</span><span>${isDrinks? 'مشروبات' : fmt(o.total)}</span></div>
@@ -1574,12 +1588,7 @@ function orderRow(o, isAdminView){
     ${paymentBadge}
     ${noteHtml}
     ${instapayInfo}
-    <div class="actions">
-      ${isNewPending? `<button class="btn-main btn-confirm" style="width:auto;margin:0;padding:8px 14px;font-size:12.5px;" data-action="confirmKitchenOrder" data-id="${o.id}">✅ تأكيد الطلب</button>`:''}
-      ${(isNewPending||canEdit)? `<button class="btn-ghost" style="color:#c53030;border-color:#c53030;" data-action="rejectOrder" data-id="${o.id}">${isNewPending? '❌ رفض الطلب':'❌ إلغاء الطلب'}</button>`:''}
-      ${canEdit? `<button class="btn-ghost" data-action="markDone" data-id="${o.id}">تم التجهيز ✓</button>`:''}
-      ${needsPaymentConfirm? `<button class="btn-ghost" data-action="confirmPayment" data-id="${o.id}">تأكيد استلام الفلوس 💵</button>`:''}
-    </div>
+    ${actionsHtml}
   </div>`;
 }
 function renderTabs(){
@@ -1592,14 +1601,30 @@ function renderTabs(){
       <button class="tab ${state.tab==='balance'?'active':''}" data-action="tab" data-tab="balance"><span class="ic">💰</span>رصيدي</button>
       <button class="tab ${state.tab==='chat'?'active':''}" data-action="tab" data-tab="chat"><span class="ic">💬</span>شات ضياء${state.chatUnread? '<span class="chat-dot"></span>':''}</button>
       ${state.role==='admin'? `<button class="tab ${state.tab==='admin'?'active':''}" data-action="tab" data-tab="admin"><span class="ic">🛠️</span>الإدارة</button>`:''}`;
+  } else if(state.role==='kitchen'){
+    tb.innerHTML = `
+      <button class="tab ${state.tab!=='admin'?'active':''}" data-action="tab" data-tab="order"><span class="ic">🍳</span>لوحة المطبخ</button>
+      <button class="tab ${state.tab==='admin'?'active':''}" data-action="tab" data-tab="admin"><span class="ic">🛠️</span>لوحة الإدارة</button>`;
   } else {
-    tb.innerHTML = `<button class="tab active"><span class="ic">🍳</span>لوحة المطبخ</button>`;
+    tb.innerHTML = '';
   }
 }
+// الأكشنز اللي الشيف بس هو اللي ينفّذها (الأدمن بيتفرج بس)
+const KITCHEN_ONLY_ACTIONS = [
+  'confirmKitchenOrder','markDone','rejectOrder','confirmPayment',
+  'substituteItem','adjustQty','removeOrderItem',
+  'approveBalanceRequest','topup'
+];
 function bindEvents(){
   document.querySelectorAll('[data-action]').forEach(el=>{
     el.onclick = async ()=>{
       const action = el.dataset.action;
+      // صلاحيات الشيف بس: تأكيد/إلغاء/تعديل الطلبات، تأكيد استلام الفلوس، وشحن أو قبول طلبات الرصيد.
+      // الأدمن بيشوف كل ده للمتابعة بس مش بينفّذه.
+      if(state.role==='admin' && KITCHEN_ONLY_ACTIONS.includes(action)){
+        toast('دي صلاحية الشيف بس');
+        return;
+      }
       if(action==='doLogin'){ await doLogin(); }
       else if(action==='switchUser'){
         state.name=''; state.role=null; state.cart={}; state.drinkCart={}; state.snackCart={}; state.isAdmin=false; state.topupMode=null;

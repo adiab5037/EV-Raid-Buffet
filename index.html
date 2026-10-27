@@ -9,7 +9,7 @@
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 
 <!-- ============================================================
      خطوة 1: يرجى إدخال بيانات إعداد Firebase الخاصة بمشروعك من الصفحة التالية
@@ -520,6 +520,205 @@
   .card h2{ display:flex; align-items:center; gap:6px; }
 
   ::selection{ background:rgba(121,186,72,0.35); }
+
+  /* =====================================================================
+     تحديث الشكل (v30): هيدر متحرك، كروت أصناف بأيقونات، تتبّع الطلب، احتفال بعد التأكيد
+     نفس الألوان (أزرق + أخضر) بس بإحساس تطبيق حقيقي
+     ===================================================================== */
+  body, button, input, textarea{ font-family:'IBM Plex Sans Arabic','Tajawal',sans-serif; }
+  .card h2, .balance-box .amt, .balance-badge{ font-family:'IBM Plex Sans Arabic','Tajawal',sans-serif; }
+
+  /* ----- الهيدر ----- */
+  .brand{
+    display:flex; align-items:center; gap:14px; text-align:right;
+    padding:18px 18px 26px; margin:-18px -16px 18px;
+    border-radius:0 0 30px 30px;
+    background:linear-gradient(135deg,#082f52 0%,#0b4271 45%,#1b6aa5 100%);
+    position:relative; overflow:hidden;
+    box-shadow:0 14px 34px rgba(8,47,82,0.28);
+  }
+  .brand::before{
+    content:''; position:absolute; width:230px; height:230px; border-radius:50%;
+    background:radial-gradient(circle, rgba(121,186,72,0.5), transparent 65%);
+    top:-100px; left:-70px; pointer-events:none;
+    animation:glowA 9s ease-in-out infinite alternate;
+  }
+  .brand::after{
+    content:''; position:absolute; width:210px; height:210px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.2), transparent 65%);
+    bottom:-110px; right:-40px; pointer-events:none;
+    animation:glowB 11s ease-in-out infinite alternate;
+  }
+  @keyframes glowA{ to{ transform:translate(70px,34px) scale(1.15); } }
+  @keyframes glowB{ to{ transform:translate(-60px,-22px) scale(1.2); } }
+  .brand > *{ position:relative; z-index:1; }
+  .brand-curve{ display:none; }
+  .brand-logo-wrap{ background:#fff; border-radius:18px; padding:9px 14px; flex:0 0 auto; box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+  .brand-logo{ display:block; }
+  .brand p{ margin:0; color:#fff; font-weight:600; font-size:13.5px; line-height:1.55; }
+  #balanceBadge:not(:empty) + .brand p{ padding-inline-end:104px; }
+  .brand-logo{ max-width:88px; }
+  .balance-badge{ right:auto; left:16px; top:22px; z-index:5; box-shadow:0 8px 18px rgba(0,0,0,0.18); }
+
+  /* ----- الكروت ----- */
+  .card{
+    border-radius:20px; border:1px solid var(--line); border-right:1px solid var(--line);
+    padding:18px 16px 16px;
+    box-shadow:0 1px 2px rgba(11,66,113,0.04), 0 10px 26px rgba(11,66,113,0.06);
+  }
+  .card h2{ display:flex; align-items:center; gap:9px; font-size:17px; border-bottom:none; padding-bottom:4px; margin-bottom:10px; }
+  .card h2::before{ content:''; width:5px; height:20px; border-radius:4px; background:var(--green); flex:0 0 auto; }
+  .btn-main{ border-radius:14px; }
+
+  /* ----- كارت الترحيب ----- */
+  .greet{ display:flex; align-items:center; gap:12px; }
+  .avatar{
+    flex:0 0 auto; width:46px; height:46px; border-radius:50%;
+    background:linear-gradient(135deg,var(--green),var(--green-dark)); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
+    box-shadow:0 6px 14px rgba(63,122,44,0.35);
+  }
+  .greet .hi{ font-size:12px; color:var(--muted); line-height:1.5; }
+  .greet .nm{ font-weight:800; font-size:16px; line-height:1.35; }
+  .greet .sw{ margin-inline-start:auto; padding:7px 11px; font-size:11.5px; flex:0 0 auto; }
+
+  /* ----- الأصناف ----- */
+  .menu-item{
+    background:#f5f8fb; border:1px solid var(--line); border-radius:16px;
+    padding:11px 12px; margin-bottom:8px; gap:10px; flex-wrap:wrap;
+    transition:background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  }
+  .menu-item:last-child{ border-bottom:1px solid var(--line); margin-bottom:0; }
+  .menu-item.in-cart{
+    background:linear-gradient(135deg,#eff9e8,#ffffff);
+    border-color:rgba(121,186,72,0.6);
+    box-shadow:0 8px 18px rgba(63,122,44,0.13);
+  }
+  .menu-item .name{ display:flex; align-items:center; gap:9px; font-size:15px; }
+  .mi-ic{
+    flex:0 0 auto; width:36px; height:36px; border-radius:50%;
+    background:#fff; border:1px solid var(--line);
+    display:inline-flex; align-items:center; justify-content:center; font-size:19px; line-height:1;
+    box-shadow:0 3px 8px rgba(11,66,113,0.08);
+  }
+  .menu-item .price-row{ margin-top:8px; flex-wrap:wrap; }
+  .price-btn{ padding:7px 13px; white-space:nowrap; background:#fff; border:1.5px solid rgba(11,66,113,0.18); }
+  .price-btn.selected{ background:linear-gradient(135deg,var(--green),var(--green-dark)); border-color:transparent; color:#fff; box-shadow:0 5px 12px rgba(63,122,44,0.3); }
+  .menu-item .stepper{ margin-inline-start:auto; gap:9px; }
+  .stepper button{ width:30px; height:30px; border-radius:50%; font-size:17px; background:var(--green); transition:transform .1s ease; }
+  .stepper button:active{ transform:scale(0.88); }
+  .qty-badge{ animation:popIn .25s ease; }
+  @keyframes popIn{ from{ transform:scale(0.55); opacity:.4; } to{ transform:scale(1); opacity:1; } }
+
+  /* ----- شريط السلة ----- */
+  .cart-bar{
+    background:linear-gradient(135deg,var(--green-dark),var(--green));
+    border-radius:18px; padding:12px 14px;
+    box-shadow:0 12px 26px rgba(63,122,44,0.38);
+  }
+  .cart-info{ display:flex; align-items:center; font-weight:700; }
+  .cart-count{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:26px; height:26px; padding:0 8px; margin-inline-end:9px;
+    border-radius:13px; background:#fff; color:var(--green-dark); font-weight:800; font-size:13px;
+    animation:popIn .25s ease;
+  }
+  .cart-bar .btn-main.btn-confirm{ background:#fff; color:var(--navy); box-shadow:none; border-radius:12px; font-weight:800; }
+
+  /* ----- التابات ----- */
+  .tab{ transition:background .15s ease, color .15s ease; }
+  .tab.active{ background:rgba(121,186,72,0.2); color:var(--navy); box-shadow:none; }
+  .tab{ position:relative; }
+  .tab.active::after{ content:''; position:absolute; bottom:2px; left:50%; margin-left:-2.5px; width:5px; height:5px; border-radius:50%; background:var(--green-dark); }
+  .tab .ic{ transition:transform .15s ease; }
+  .tab.active .ic{ transform:scale(1.15); }
+
+  /* ----- كارت الرصيد ----- */
+  .balance-box:not(.mini){
+    background:linear-gradient(135deg,#0b4271 0%,#1b6aa5 100%) !important;
+    border:none !important; color:#fff; border-radius:24px;
+    position:relative; overflow:hidden;
+    box-shadow:0 16px 32px rgba(11,66,113,0.32);
+  }
+  .balance-box:not(.mini)::before{ content:''; position:absolute; width:170px; height:170px; border-radius:50%; background:rgba(121,186,72,0.28); top:-70px; left:-50px; }
+  .balance-box:not(.mini)::after{ content:''; position:absolute; width:130px; height:130px; border-radius:50%; background:rgba(255,255,255,0.09); bottom:-55px; right:-35px; }
+  .balance-box:not(.mini) > *{ position:relative; z-index:1; }
+  .balance-box:not(.mini) .small{ color:rgba(255,255,255,0.88); opacity:1; }
+  .balance-box:not(.mini) .amt{ color:#fff; animation:popIn .45s ease; }
+  .balance-box:not(.mini) .amt.owe{ color:#ffd4d4; }
+  .balance-box:not(.mini) .btn-ghost{ border-color:rgba(255,255,255,0.7); color:#fff; background:rgba(255,255,255,0.13); }
+  .balance-box.mini{ background:#fff !important; border:1.5px solid var(--line) !important; color:var(--ink); box-shadow:none; }
+  .balance-box.mini .small{ color:var(--muted); }
+
+  /* ----- تتبّع الطلب ----- */
+  .track{ display:flex; margin-top:10px; padding-top:2px; }
+  .track .st{ flex:1; position:relative; text-align:center; font-size:10.5px; color:var(--muted); line-height:1.4; }
+  .track .st::before{
+    content:''; display:block; width:14px; height:14px; border-radius:50%;
+    background:#dfe6ee; border:2px solid #fff; box-shadow:0 0 0 1.5px #dfe6ee; margin:0 auto 4px; position:relative; z-index:1;
+  }
+  .track .st:not(:last-child)::after{ content:''; position:absolute; top:6px; right:50%; width:100%; height:2px; background:#dfe6ee; }
+  .track .st.on{ color:var(--green-dark); font-weight:700; }
+  .track .st.on::before{ background:var(--green); box-shadow:0 0 0 1.5px var(--green); }
+  .track .st.link::after{ background:var(--green); }
+  .track .st.now::before{ animation:dotPulse 1.4s ease-in-out infinite; }
+  @keyframes dotPulse{ 0%{ box-shadow:0 0 0 1.5px var(--green), 0 0 0 0 rgba(121,186,72,0.55); } 70%{ box-shadow:0 0 0 1.5px var(--green), 0 0 0 9px rgba(121,186,72,0); } 100%{ box-shadow:0 0 0 1.5px var(--green), 0 0 0 0 rgba(121,186,72,0); } }
+
+  /* ----- تحميل ----- */
+  .skel{
+    height:58px; border-radius:14px; margin-bottom:8px;
+    background:linear-gradient(90deg,#eef2f6 25%,#f8fafc 50%,#eef2f6 75%); background-size:200% 100%;
+    animation:shimmer 1.2s linear infinite;
+  }
+  @keyframes shimmer{ to{ background-position:-200% 0; } }
+
+  /* ----- دخول أول مرة على كل شاشة ----- */
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  #content.enter .card, #content.enter .menu-item, #content.enter .login-hero{ animation:fadeUp .45s ease both; }
+  #content.enter .card:nth-child(2){ animation-delay:.05s; }
+  #content.enter .card:nth-child(3){ animation-delay:.1s; }
+  #content.enter .card:nth-child(4){ animation-delay:.15s; }
+  #content.enter .menu-item:nth-child(2){ animation-delay:.04s; }
+  #content.enter .menu-item:nth-child(3){ animation-delay:.08s; }
+  #content.enter .menu-item:nth-child(4){ animation-delay:.12s; }
+  #content.enter .menu-item:nth-child(5){ animation-delay:.16s; }
+  #content.enter .menu-item:nth-child(6){ animation-delay:.2s; }
+
+  /* ----- شاشة الدخول ----- */
+  .login-hero{ text-align:center; position:relative; padding:6px 0 18px; }
+  .login-hero .big{ font-weight:800; font-size:22px; color:var(--navy); line-height:1.4; }
+  .login-hero .sub{ font-size:13px; color:var(--muted); margin-top:4px; }
+  .login-hero .fl{ position:absolute; font-size:26px; opacity:.9; animation:floaty 4s ease-in-out infinite; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(0) rotate(-6deg); } 50%{ transform:translateY(-9px) rotate(6deg); } }
+  .login-hero .ver{ font-size:10px; color:var(--muted); opacity:.55; margin-top:6px; }
+
+  /* ----- احتفال بعد تأكيد الطلب ----- */
+  .celebrate{
+    position:fixed; top:0; left:0; right:0; bottom:0; z-index:9000;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    background:rgba(8,47,82,0.55); animation:fadeIn .2s ease;
+  }
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  .cel-card{
+    position:relative; z-index:2; background:#fff; border-radius:26px; padding:26px 32px; text-align:center;
+    box-shadow:0 24px 56px rgba(0,0,0,0.32); animation:popIn .45s cubic-bezier(.2,.9,.3,1.25);
+    max-width:80%;
+  }
+  .cel-check{
+    width:76px; height:76px; border-radius:50%; margin:0 auto 12px;
+    background:linear-gradient(135deg,var(--green),var(--green-dark)); color:#fff; font-size:42px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 10px 24px rgba(63,122,44,0.4);
+  }
+  .cel-title{ font-weight:800; font-size:19px; color:var(--navy); }
+  .cel-sub{ font-size:13px; color:var(--muted); margin-top:5px; line-height:1.6; }
+  .confetti{ position:absolute; top:-30px; font-size:22px; z-index:1; animation-name:confFall; animation-timing-function:linear; animation-fill-mode:forwards; }
+  @keyframes confFall{ to{ transform:translateY(115vh) rotate(540deg); } }
+
+  @media (prefers-reduced-motion: reduce){
+    .brand::before, .brand::after, .login-hero .fl, .skel, .track .st.now::before{ animation:none; }
+    #content.enter .card, #content.enter .menu-item, #content.enter .login-hero{ animation:none; }
+    .confetti{ display:none; }
+  }
 </style>
 </head>
 <body>
@@ -664,6 +863,96 @@ const openEmpCards = new Set();
 window.__toggleEmp = function(name, isOpen){
   if(isOpen) openEmpCards.add(name); else openEmpCards.delete(name);
 };
+
+
+// ---------- لمسات الشكل: أيقونات الأكل، الترحيب، تتبّع الطلب، الاحتفال ----------
+function foodEmoji(name){
+  const n = String(name||'');
+  const map = [
+    [/بيض|أومليت/,'🍳'],[/جبن|رومي|شيدر/,'🧀'],[/طماطم/,'🍅'],[/بسطرمة|لانشون|سجق/,'🥓'],
+    [/سلطة|خضر/,'🥗'],[/سكلانس|عيش|فينو|توست|ساندوتش/,'🥖'],[/فول/,'🫘'],[/طعمية|فلافل/,'🧆'],
+    [/مولتو|آيس|ايس|شوكولات/,'🍫'],[/بسكويت|أوريو|أولكر|ماندولين|كيك|ماكفيز/,'🍪'],
+    [/شاي|ينسون|كركديه|نعناع/,'🍵'],[/قهوة|إسبريسو|كابتشينو|لاتيه|نسكافيه/,'☕'],[/ليمون|عصير/,'🍋'],[/مياه|ماء/,'💧']
+  ];
+  for(const [re,e] of map){ if(re.test(n)) return e; }
+  return '🍽️';
+}
+function greetCardHtml(){
+  const raw = String(state.name||'');
+  const local = raw.split('@')[0] || raw;
+  const first = (local.split(/[._\-]/)[0] || local);
+  const shown = first.charAt(0).toUpperCase() + first.slice(1);
+  const h = new Date().getHours();
+  const sub = h<11 ? 'صباح الخير ☀️' : (h<16 ? 'الغدا قرّب 🍽️' : 'مساء الخير 🌙');
+  return `
+  <div class="card greet">
+    <div class="avatar">${escapeHtml(shown.charAt(0) || '؟')}</div>
+    <div style="min-width:0;"><div class="hi">${sub}</div><div class="nm">أهلاً يا ${escapeHtml(shown)}</div></div>
+    <button class="btn-ghost sw" data-action="switchUser">تغيير المستخدم</button>
+  </div>`;
+}
+function trackerHtml(status){
+  const cur = status==='confirmed' ? 1 : 0;
+  const steps = ['تم الإرسال','قيد التحضير','جاهز 🎉'];
+  return '<div class="track">' + steps.map(function(t,i){
+    let c = '';
+    if(i<=cur) c += ' on';
+    if(i<cur) c += ' link';
+    if(i===cur) c += ' now';
+    return '<div class="st'+c+'">'+t+'</div>';
+  }).join('') + '</div>';
+}
+function celebrate(title, sub){
+  try{
+    const old = document.getElementById('celebrate'); if(old) old.remove();
+    const ov = document.createElement('div');
+    ov.id = 'celebrate'; ov.className = 'celebrate';
+    const em = ['🎉','🧀','🥚','🥖','🍅','🥗','✨','🍪'];
+    let conf = '';
+    for(let i=0;i<22;i++){
+      const left = Math.round(Math.random()*100);
+      const dur = (1.7 + Math.random()*1.4).toFixed(2);
+      const delay = (Math.random()*0.5).toFixed(2);
+      conf += '<span class="confetti" style="left:'+left+'%;animation-duration:'+dur+'s;animation-delay:'+delay+'s;">'+em[i%em.length]+'</span>';
+    }
+    ov.innerHTML = conf + '<div class="cel-card"><div class="cel-check">✓</div><div class="cel-title">'+(title||'تم إرسال طلبك')+'</div><div class="cel-sub">'+(sub||'')+'</div></div>';
+    ov.onclick = function(){ ov.remove(); };
+    document.body.appendChild(ov);
+    setTimeout(function(){ if(ov.parentNode) ov.remove(); }, 2700);
+  }catch(e){}
+}
+// بيتابع حالة طلبات الموظف بمستمع لحظي (بيقرا بس لما حاجة تتغير، مش كل شوية)، ولو الشيف قبل الطلب أو جهّزه يظهرله إشعار
+let _lastStatuses = null, _myOrdersUnsub = null, _myOrdersFor = null;
+function handleMyOrdersSnapshot(who, snap){
+  if(state.name!==who) return;
+  const mine = snap.docs.map(function(d){ return d.data(); });
+  const cur = {};
+  mine.forEach(function(o){ cur[o.id || o.ts] = o.status; });
+  if(_lastStatuses){
+    mine.forEach(function(o){
+      const k = o.id || o.ts;
+      const before = _lastStatuses[k];
+      if(before==='pending' && o.status==='confirmed'){ toast('👨‍🍳 الشيف قبل طلبك وبدأ يحضّره'); }
+      if(before && before!=='done' && o.status==='done'){
+        toast('🎉 طلبك جاهز! تعالى خده');
+        try{ if(navigator.vibrate) navigator.vibrate([120,60,120]); }catch(e){}
+      }
+    });
+  }
+  _lastStatuses = cur;
+  if(document.getElementById('myOrdersList')) refreshMyOrders();
+}
+function ensureMyOrdersListener(){
+  try{
+    const want = (firebaseReady && state.name && (state.role==='employee' || state.role==='admin')) ? state.name : null;
+    if(want === _myOrdersFor) return;
+    if(_myOrdersUnsub){ try{ _myOrdersUnsub(); }catch(e){} _myOrdersUnsub = null; }
+    _myOrdersFor = want; _lastStatuses = null;
+    if(!want) return;
+    _myOrdersUnsub = db.collection('orders').where('name','==',want).orderBy('ts','desc').limit(8)
+      .onSnapshot(function(snap){ handleMyOrdersSnapshot(want, snap); }, function(){});
+  }catch(e){}
+}
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -978,6 +1267,13 @@ function render(){
   renderBalanceBadge();
   renderTabs();
   bindEvents();
+  const viewKey = (state.name||'') + '|' + state.tab + '|' + state.role;
+  if(window.__viewKey !== viewKey){
+    window.__viewKey = viewKey;
+    c.classList.remove('enter'); void c.offsetWidth; c.classList.add('enter');
+    setTimeout(function(){ c.classList.remove('enter'); }, 800);
+  }
+  ensureMyOrdersListener();
 }
 function renderBalanceBadge(){
   const el = document.getElementById('balanceBadge');
@@ -993,6 +1289,13 @@ function renderBalanceBadge(){
 function nameScreen(){
   const lastEmail = (function(){ try{ return localStorage.getItem('evraid_last_email')||''; }catch(e){ return ''; } })();
   return `
+  <div class="login-hero">
+    <span class="fl" style="top:2px;right:8%;">🥪</span><span class="fl" style="top:34px;left:6%;animation-delay:.6s;">🧀</span>
+    <span class="fl" style="top:84px;right:2%;animation-delay:1.2s;">☕</span><span class="fl" style="top:92px;left:14%;animation-delay:1.8s;">🍳</span>
+    <div class="big" style="padding-top:34px;">جعان؟ 😋<br>اطلب من مطبخ الشركة</div>
+    <div class="sub">سجّل دخولك واختار وجبتك في ثواني</div>
+    <div class="ver">نسخة 30</div>
+  </div>
   <div class="card" style="text-align:center;">
     <h2>🔐 تسجيل الدخول</h2>
     <p class="small">أول استخدام؟ سيتم إنشاء حسابك تلقائيًا بإيميلك وكلمة المرور التي تحددها.</p>
@@ -1026,9 +1329,9 @@ function orderScreen(){
     const showBaladi = it.baladi!=null && !(hasBoth && state.outOfStock.has(it.id+'__baladi'));
     const showFransawi = it.fransawi!=null && !(hasBoth && state.outOfStock.has(it.id+'__fransawi'));
     return `
-    <div class="menu-item">
+    <div class="menu-item ${qty>0?'in-cart':''}">
       <div style="flex:1;">
-        <div class="name">${it.name}</div>
+        <div class="name"><span class="mi-ic">${foodEmoji(it.name)}</span>${it.name}</div>
         <div class="price-row">
           ${showBaladi? `<button class="price-btn ${c&&c.type==='baladi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="baladi">بلدي ${it.baladi}</button>`:''}
           ${showFransawi? `<button class="price-btn ${c&&c.type==='fransawi'?'selected':''}" data-action="pick" data-id="${it.id}" data-type="fransawi">فرنساوي ${it.fransawi}</button>`:''}
@@ -1046,8 +1349,8 @@ function orderScreen(){
   const snackItemsHtml = availableSnacks.map(s=>{
     const qty = state.snackCart[s.id] ? state.snackCart[s.id].qty : 0;
     return `
-    <div class="menu-item">
-      <div class="name">${s.name} <span class="small">— ${s.price} ج.م</span></div>
+    <div class="menu-item ${qty>0?'in-cart':''}">
+      <div class="name"><span class="mi-ic">${foodEmoji(s.name)}</span>${s.name} <span class="small">— ${s.price} ج.م</span></div>
       ${qty>0? `
       <div class="stepper">
         <button data-action="decSnack" data-id="${s.id}">−</button>
@@ -1057,11 +1360,9 @@ function orderScreen(){
     </div>`;
   }).join('');
   const cartCount = Object.keys(state.cart).length + Object.keys(state.snackCart).length;
+  const cartQty = Object.keys(state.cart).reduce(function(n,k){ return n + state.cart[k].qty; },0) + Object.keys(state.snackCart).reduce(function(n,k){ return n + state.snackCart[k].qty; },0);
   return `
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
-    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
-  </div>
+  ${greetCardHtml()}
   <div class="card"><h2>🍽️ البوفيه</h2>${items || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
   <div class="card"><h2>🍪 سناكس</h2>${snackItemsHtml || `<div class="empty">لا توجد أصناف متاحة حاليًا</div>`}</div>
   ${cartCount>0? `
@@ -1071,7 +1372,7 @@ function orderScreen(){
   </div>
   ${paymentMethodBlock()}
   <div class="cart-bar">
-    <span>الإجمالي: ${fmt(total)}</span>
+    <span class="cart-info"><span class="cart-count">${cartQty}</span>الإجمالي: ${fmt(total)}</span>
     <button class="btn-main btn-confirm" style="width:auto;margin:0;padding:9px 16px;" data-action="confirmOrder">تأكيد الطلب</button>
   </div>`:''}`;
 }
@@ -1105,8 +1406,8 @@ function drinksScreen(){
   const items = available.map(d=>{
     const qty = state.drinkCart[d.id] ? state.drinkCart[d.id].qty : 0;
     return `
-    <div class="menu-item">
-      <div class="name">${d.name}</div>
+    <div class="menu-item ${qty>0?'in-cart':''}">
+      <div class="name"><span class="mi-ic">${foodEmoji(d.name)}</span>${d.name}</div>
       ${qty>0? `
       <div class="stepper">
         <button data-action="decDrink" data-id="${d.id}">−</button>
@@ -1117,10 +1418,7 @@ function drinksScreen(){
   }).join('');
   const drinkCount = Object.keys(state.drinkCart).length;
   return `
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
-    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
-  </div>
+  ${greetCardHtml()}
   <div class="card">
     <h2>☕ المشروبات</h2>
     <p class="small" style="margin-top:-6px;">جميع المشروبات مجانية ولا تُخصم من رصيدك</p>
@@ -1147,10 +1445,7 @@ function chatScreen(){
     </div>`;
   }).join('');
   return `
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
-    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
-  </div>
+  ${greetCardHtml()}
   <div class="card">
     <h2>💬 شات مع ضياء</h2>
     <p class="small" style="margin-top:-6px;">ابعت أي رسالة أو طلب لضياء مباشرة</p>
@@ -1237,12 +1532,9 @@ function balanceCardWithActions(){
 }
 function balanceScreen(){
   return `
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><div class="small">أهلاً</div><div style="font-weight:900;font-size:16px;">${state.name}</div></div>
-    <button class="btn-ghost" data-action="switchUser">تغيير المستخدم</button>
-  </div>
+  ${greetCardHtml()}
   ${balanceCardWithActions()}
-  <div class="card"><h2>🧾 آخر طلباتي</h2><div id="myOrdersList" class="small">جارِ التحميل...</div></div>`;
+  <div class="card"><h2>🧾 آخر طلباتي</h2><div id="myOrdersList" class="small"><div class="skel"></div><div class="skel"></div></div></div>`;
 }
 function kitchenScreen(){
   const pending = state.orders.filter(o=>o.status==='pending');
@@ -1896,6 +2188,7 @@ async function handleSubmitBalanceRequest(){
     await saveBalanceRequest(req);
     state.topupMode = null;
     toast('تم إرسال الطلب، بانتظار المراجعة');
+    celebrate('تم إرسال طلبك!','هيوصلك إشعار أول ما الشيف يقبله');
     render();
   }catch(e){ toast('حدث خطأ أثناء إرسال الطلب'); }
 }
@@ -2041,6 +2334,7 @@ async function submitOrder(){
     state.cart = {};
     state.snackCart = {};
     toast(method==='instapay' ? 'تم إرسال الطلب — بانتظار تأكيد التحويل' : 'تم إرسال الطلب — هيتخصم من رصيدك بعد ما الشيف يأكّده');
+    celebrate('تم إرسال طلبك!', method==='instapay' ? 'بانتظار تأكيد التحويل من الشيف' : 'هيتخصم من رصيدك بعد ما الشيف يأكّده');
     render();
     sendChefEmail(order);
   }catch(e){ toast('حدث خطأ، يرجى المحاولة مرة أخرى'); }
@@ -2123,7 +2417,7 @@ async function refreshMyOrders(){
       const statusLabel = {pending:'🆕 بانتظار تأكيد الشيف', confirmed:'⏳ قيد التحضير', done:'✅ جاهز', cancelled:'❌ اتلغى'}[o.status] || '⏳ قيد التحضير';
       // يقدر يلغي طلبه بنفسه طول ما الشيف لسه معملش قبول (status لسه pending)
       const cancelBtn = o.status==='pending' ? `<button class="btn-ghost" style="color:#c53030;border-color:#c53030;margin-top:6px;padding:6px 12px;font-size:11.5px;" data-action="cancelMyOrder" data-id="${o.id}">❌ إلغاء الطلب</button>` : '';
-      return `<div class="order-row ${o.status==='cancelled'?'cancelled':''}"><div class="top"><span>${label}</span><span>${statusLabel}</span></div><div class="items">${itemsStr}</div><div class="small">${time}</div>${cancelBtn}</div>`;
+      return `<div class="order-row ${o.status==='cancelled'?'cancelled':''}"><div class="top"><span>${label}</span><span>${statusLabel}</span></div><div class="items">${itemsStr}</div>${(o.status==='pending'||o.status==='confirmed')? trackerHtml(o.status) : ''}<div class="small">${time}</div>${cancelBtn}</div>`;
     }).join('');
   }).catch(()=>{ el.innerHTML = `<div class="empty">تعذر تحميل الطلبات</div>`; });
 }

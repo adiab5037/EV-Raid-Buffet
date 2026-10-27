@@ -1,4 +1,4 @@
-const CACHE = 'zad-cache-v28';
+const CACHE = 'zad-cache-v31';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -849,12 +849,12 @@ let state = {
   topupMode: null, balanceRequests: [],
   chatMessages: [], chatUnread: false, hasChatPolledOnce: false,
   seenOrderIds: new Set(),
-  transactions: [],
+  transactions: [], manualDeductions: [],
   kitchenUnlocked: false,
   kitchenLogDate: null,
   kitchenTxDate: null,
   hasPolledOnce: false,
-  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null, _unsubMyBalance: null,
+  _unsubOrders: null, _unsubBalances: null, _unsubStock: null, _unsubCustomItems: null, _unsubPrices: null, _unsubBalanceRequests: null, _unsubTransactions: null, _unsubManualDed: null, _unsubMyBalance: null,
   _audioCtx: null,
 };
 
@@ -1133,6 +1133,13 @@ async function addToBalance(name, delta, type, note){
       name, delta, type: type || 'أخرى', note: note || '', ts: Date.now()
     });
   }catch(e){ console.error('transaction log failed', e); }
+}
+// الخصومات اليدوية اللي الشيف بيعملها على الموظفين — بتتحسب ضمن الإيراد (بنفلتر بالتاريخ في الكود عشان مانحتاجش index في Firestore)
+function listenManualDeductions(cb){
+  if(!firebaseReady) return ()=>{};
+  return db.collection('transactions').where('type','==','خصم يدوي').onSnapshot(snap=>{
+    cb(snap.docs.map(d=>({id:d.id, ...d.data()})));
+  });
 }
 function listenTransactions(cb){
   if(!firebaseReady) return ()=>{};
@@ -1726,10 +1733,15 @@ function adminScreen(){
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const currentMonthLabel = now.toLocaleDateString('ar-EG', {month:'long', year:'numeric'});
-  const totalSales = paidOrders.reduce((s,o)=>s+o.total,0);
+  // أي فلوس الشيف خصمها يدويًا من موظف (خصم يدوي) بتتضاف للإيراد زيها زي المبيعات
+  const manualDeds = (state.manualDeductions||[]).filter(t=>t.delta<0).map(t=>({name:t.name, amount:-t.delta, ts:t.ts}));
+  const totalDeds = manualDeds.reduce((s,d)=>s+d.amount,0);
+  const todayDeds = manualDeds.filter(d=>d.ts>=startOfDay).reduce((s,d)=>s+d.amount,0);
+  const monthDeds = manualDeds.filter(d=>d.ts>=startOfMonth).reduce((s,d)=>s+d.amount,0);
+  const totalSales = paidOrders.reduce((s,o)=>s+o.total,0) + totalDeds;
   const todayOrders = paidOrders.filter(o=>o.ts>=startOfDay);
-  const todaySales = todayOrders.reduce((s,o)=>s+o.total,0);
-  const monthSales = paidOrders.filter(o=>o.ts>=startOfMonth).reduce((s,o)=>s+o.total,0);
+  const todaySales = todayOrders.reduce((s,o)=>s+o.total,0) + todayDeds;
+  const monthSales = paidOrders.filter(o=>o.ts>=startOfMonth).reduce((s,o)=>s+o.total,0) + monthDeds;
   const todayByMethod = {balance:0, instapay:0};
   todayOrders.forEach(o=>{ todayByMethod[o.paymentMethod] = (todayByMethod[o.paymentMethod]||0) + o.total; });
   const salesHtml = `
@@ -1740,9 +1752,10 @@ function adminScreen(){
       <div class="balance-box mini"><div class="small">إجمالي كل الوقت</div><div class="amt ok">${fmt(totalSales)}</div></div>
     </div>
     <div class="small" style="margin-top:10px;font-weight:700;">تفصيل فلوس النهاردة حسب وسيلة الدفع</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;">
       <div class="balance-box mini"><div class="small">💳 من الرصيد</div><div class="amt ok">${fmt(todayByMethod.balance)}</div></div>
       <div class="balance-box mini"><div class="small">📲 إنستاباي</div><div class="amt ok">${fmt(todayByMethod.instapay)}</div></div>
+      <div class="balance-box mini"><div class="small">✂️ خصم يدوي</div><div class="amt ok">${fmt(todayDeds)}</div></div>
     </div>`;
   // سجل المبيعات شهر بشهر: كل شهر بإجماليه وعدد طلباته وتفصيل وسيلة الدفع
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -1751,7 +1764,7 @@ function adminScreen(){
     const d = new Date(o.ts);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if(!byMonth[key]) byMonth[key] = {
-      total:0, count:0, balance:0, instapay:0,
+      total:0, count:0, balance:0, instapay:0, deds:0,
       label: d.toLocaleDateString('ar-EG', {month:'long', year:'numeric'}),
       people: new Set()
     };
@@ -1760,6 +1773,18 @@ function adminScreen(){
     byMonth[key][o.paymentMethod] = (byMonth[key][o.paymentMethod]||0) + o.total;
     byMonth[key].people.add(o.name);
   });
+  manualDeds.forEach(dd=>{
+    const d = new Date(dd.ts);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(!byMonth[key]) byMonth[key] = {
+      total:0, count:0, balance:0, instapay:0, deds:0,
+      label: d.toLocaleDateString('ar-EG', {month:'long', year:'numeric'}),
+      people: new Set()
+    };
+    byMonth[key].total += dd.amount;
+    byMonth[key].deds += dd.amount;
+    byMonth[key].people.add(dd.name);
+  });
   const monthKeys = Object.keys(byMonth).sort().reverse();
   const monthlyHtml = monthKeys.length? monthKeys.map(k=>{
     const m = byMonth[k];
@@ -1767,7 +1792,7 @@ function adminScreen(){
     <div class="month-row ${k===currentMonthKey?'current':''}">
       <div>
         <div class="m-name">${m.label}${k===currentMonthKey?' <span style="font-size:10px;color:var(--green-dark);">(الشهر الحالي)</span>':''}</div>
-        <div class="m-sub">${m.count} طلب · ${m.people.size} موظف · 💳 ${fmt(m.balance)} · 📲 ${fmt(m.instapay)}</div>
+        <div class="m-sub">${m.count} طلب · ${m.people.size} موظف · 💳 ${fmt(m.balance)} · 📲 ${fmt(m.instapay)} · ✂️ ${fmt(m.deds)}</div>
       </div>
       <div class="m-amt">${fmt(m.total)}</div>
     </div>`;
@@ -1794,6 +1819,14 @@ function adminScreen(){
     o.items.forEach(i=>{
       byEmployee[o.name].items[i.name] = (byEmployee[o.name].items[i.name]||0) + i.qty;
     });
+  });
+  manualDeds.forEach(dd=>{
+    if(!byEmployee[dd.name]) byEmployee[dd.name] = {total:0, today:0, month:0, count:0, items:{}};
+    const e = byEmployee[dd.name];
+    e.total += dd.amount;
+    if(dd.ts>=startOfDay) e.today += dd.amount;
+    if(dd.ts>=startOfMonth) e.month += dd.amount;
+    e.items['خصم يدوي'] = (e.items['خصم يدوي']||0) + 1;
   });
   const employeeNames = Object.keys(byEmployee).sort((a,b)=>byEmployee[b].total-byEmployee[a].total);
   const employeeLedgerHtml = employeeNames.length? employeeNames.map((name, idx)=>{
@@ -1938,6 +1971,7 @@ function bindEvents(){
         if(state._unsubPrices){ state._unsubPrices(); state._unsubPrices=null; }
         if(state._unsubBalanceRequests){ state._unsubBalanceRequests(); state._unsubBalanceRequests=null; }
         if(state._unsubTransactions){ state._unsubTransactions(); state._unsubTransactions=null; }
+        if(state._unsubManualDed){ state._unsubManualDed(); state._unsubManualDed=null; }
         if(state._unsubChat){ state._unsubChat(); state._unsubChat=null; }
         if(state._unsubMyBalance){ state._unsubMyBalance(); state._unsubMyBalance=null; }
         state.chatMessages = []; state.chatUnread = false; state.hasChatPolledOnce = false;
@@ -2069,6 +2103,7 @@ async function afterLogin(){
   if(state.role==='kitchen' || state.role==='admin'){
     if(!state._unsubOrders) state._unsubOrders = listenOrders(onOrdersUpdate);
     if(!state._unsubBalances) state._unsubBalances = listenBalances(onBalancesUpdate);
+    if(!state._unsubManualDed) state._unsubManualDed = listenManualDeductions(list=>{ state.manualDeductions = list; render(); });
     if(!state._unsubBalanceRequests) state._unsubBalanceRequests = listenPendingBalanceRequests(reqs=>{
       const prevIds = new Set((state.balanceRequests||[]).map(r=>r.id));
       const fresh = reqs.filter(r=>!prevIds.has(r.id) && state.hasBalanceReqPolledOnce);

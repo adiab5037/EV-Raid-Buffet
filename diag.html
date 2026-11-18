@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>فحص الاتصال — EV Raid Buffet</title>
+<style>
+  body{font-family:sans-serif;background:#eef2f6;margin:0;padding:16px;color:#12222f;line-height:1.7;}
+  .box{max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 4px 18px rgba(11,66,113,.1);}
+  h1{font-size:19px;margin:0 0 4px;color:#0b4271;}
+  p.s{margin:0 0 12px;font-size:13px;color:#5b6b7a;}
+  input{width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #cfd8e3;border-radius:10px;font-size:15px;margin-bottom:10px;direction:ltr;}
+  button{width:100%;padding:13px;border:0;border-radius:12px;background:#0b4271;color:#fff;font-size:16px;font-weight:700;}
+  .r{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:14px;}
+  .ok{background:#e8f6e0;border:1px solid #9ad07a;} .bad{background:#fdeaea;border:1px solid #e59a9a;} .info{background:#eef4fa;border:1px solid #b9cfe6;}
+  .r b{display:block;margin-bottom:2px;} code{direction:ltr;display:inline-block;background:#f4f7fa;padding:0 6px;border-radius:6px;}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyByvzFZZKQILS_DUG-stjzF_jhNT3kkBK0",
+    authDomain: "ev-raid-buffet-a78c1.firebaseapp.com",
+    projectId: "ev-raid-buffet-a78c1",
+    storageBucket: "ev-raid-buffet-a78c1.firebasestorage.app",
+    messagingSenderId: "574467364009",
+    appId: "1:574467364009:web:b589f41eb15070340685b8"
+  };
+</script>
+</head>
+<body>
+<div class="box">
+  <h1>🔎 فحص سبب خطأ تسجيل الدخول</h1>
+  <p class="s">الصفحة دي بتقرا بس ومبتكتبش ولا بتعدّل أي حاجة، ومش بتعرض أي باسورد. اكتب إيميلك واضغط فحص، وابعتلي صورة النتيجة.</p>
+  <input id="em" type="email" placeholder="ahmed@evraid.com" autocomplete="username">
+  <button id="go">افحص</button>
+  <div id="out"></div>
+</div>
+<script>
+(function(){
+  var out = document.getElementById('out');
+  function add(kind, title, text){
+    var d = document.createElement('div'); d.className = 'r ' + kind;
+    d.innerHTML = '<b>' + title + '</b>' + (text || '');
+    out.appendChild(d);
+  }
+  function reach(url){
+    return new Promise(function(res){
+      var done = false, t = setTimeout(function(){ if(!done){ done = true; res(false); } }, 8000);
+      try{
+        fetch(url, {mode:'no-cors', cache:'no-store'}).then(function(){ if(!done){ done = true; clearTimeout(t); res(true); } })
+          .catch(function(){ if(!done){ done = true; clearTimeout(t); res(false); } });
+      }catch(e){ clearTimeout(t); res(false); }
+    });
+  }
+  var EXPLAIN = {
+    'permission-denied': 'قواعد الفايربيس (Rules) رافضة القراءة. غالبًا القواعد التجريبية انتهت بعد شهر. روح Firestore Database ثم Rules وغيّر التاريخ في سطر <code>request.time &lt; timestamp.date(...)</code> لتاريخ بعيد واضغط Publish.',
+    'resource-exhausted': 'الحصة المجانية اليومية للفايربيس خلصت (Quota exceeded). بتتصفّر لوحدها تقريبًا كل يوم، أو تترقّى لخطة Blaze.',
+    'unavailable': 'مش قادر يوصل لخوادم الفايربيس. ده مشكلة اتصال: شبكتك أو الـDNS أو VPN أو حجب لجوجل.',
+    'failed-precondition': 'الفايربيس بيطلب إعداد ناقص (غالبًا Index). ابعتلي الرسالة كاملة.',
+    'not-found': 'المشروع أو قاعدة البيانات مش موجودين. اتأكد إن المشروع لسه موجود ومتحوّل لـ Firestore.',
+    'unauthenticated': 'المفتاح (apiKey) في الملف مش مقبول. ممكن يكون المشروع اتحذف أو المفتاح اتقيّد.'
+  };
+  document.getElementById('go').onclick = async function(){
+    out.innerHTML = '';
+    var email = document.getElementById('em').value.trim().toLowerCase();
+    add('info', 'بيانات الصفحة', 'العنوان: <code>' + location.protocol + '//' + location.host + '</code> — اتصال آمن: ' + (window.isSecureContext ? 'نعم ✅' : 'لا ❌ (التشفير مش هيشتغل، ممكن يأثر على الحسابات القديمة)'));
+    add('info', 'جاري فحص الشبكة...', '');
+    var r1 = await reach('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
+    var r2 = await reach('https://firestore.googleapis.com/');
+    out.removeChild(out.lastChild);
+    add(r1 ? 'ok' : 'bad', 'موقع gstatic.com (بيحمّل منه الفايربيس): ' + (r1 ? 'متاح ✅' : 'مش متاح ❌'), r1 ? '' : 'شبكتك أو الـDNS أو برنامج حماية أو VPN مانع الوصول لجوجل. جرّب نت الموبايل أو غيّر الـDNS لـ 8.8.8.8.');
+    add(r2 ? 'ok' : 'bad', 'خادم قاعدة البيانات firestore.googleapis.com: ' + (r2 ? 'متاح ✅' : 'مش متاح ❌'), r2 ? '' : 'نفس السبب: الاتصال بخوادم جوجل متقطع أو محجوب.');
+    if(typeof firebase === 'undefined'){
+      add('bad', 'مكتبة الفايربيس: مش اتحمّلت ❌', 'ده نفس سبب ظهور الصندوق البرتقالي "خطوة أخيرة مطلوبة" في البرنامج.');
+      return;
+    }
+    add('ok', 'مكتبة الفايربيس: اتحمّلت ✅', '');
+    var db;
+    try{ firebase.initializeApp(window.FIREBASE_CONFIG); db = firebase.firestore(); }
+    catch(e){ add('bad', 'إعداد الفايربيس فشل ❌', '<code>' + (e.message || e) + '</code>'); return; }
+    try{
+      var o = await db.collection('orders').limit(1).get();
+      add('ok', 'قراءة قاعدة البيانات: شغّالة ✅', 'القواعد والاتصال والحصة سليمين.');
+    }catch(e){
+      add('bad', 'قراءة قاعدة البيانات فشلت ❌', 'الكود: <code>' + (e.code || '؟') + '</code><br>' + (EXPLAIN[e.code] || ('الرسالة: <code>' + (e.message || e) + '</code>')));
+      return;
+    }
+    if(!email){ add('info', 'لتكملة الفحص', 'اكتب إيميلك فوق واضغط افحص تاني عشان أشوف حالة حسابك.'); return; }
+    try{
+      var d = await db.collection('users').doc(email).get();
+      if(!d.exists){ add('info', 'حسابك: مش موجود في القاعدة', 'يعني أول دخول هينشئ لك حساب جديد.'); }
+      else{
+        var pw = (d.data() || {}).password;
+        var kind = (typeof pw !== 'string' || !pw) ? 'ناقص (مفيش باسورد متخزن) ❌' : (/^[0-9a-f]{64}$/.test(pw) ? 'مشفّر (SHA-256)' : 'عادي (نص)');
+        add('ok', 'حسابك موجود ✅', 'شكل الباسورد المتخزن: <b style="display:inline;">' + kind + '</b>. البرنامج الحالي بيفتح الاتنين.');
+      }
+    }catch(e){
+      add('bad', 'قراءة حسابك فشلت ❌', 'الكود: <code>' + (e.code || '؟') + '</code>');
+    }
+  };
+})();
+</script>
+</body>
+</html>
